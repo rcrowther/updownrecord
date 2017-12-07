@@ -1,8 +1,11 @@
 import csv
 import json
-import collections
-from itertools import chain
+import configparser
+
 import io
+import collections
+import os
+from itertools import chain
 
 import traceback
 from django.shortcuts import render
@@ -19,17 +22,32 @@ from django.views.generic import View
 
 #? get a 'SaveAs'
 #? use pk or not
-#? save ranges too?
-#? headers in CSV?
-#? do init files?
+#? save ranges too
+#? headers in CSV
+#? do init files
+#? guess or state for upload
+#? state or offer for download
+#? how about updating too?
+#? size limitations
+#? Admin protection
+#? check charsets
+#? XML
+#! I always lean towards id only for filenames? Offer choice?
+
+
+
 StructureData = collections.namedtuple('StructureData', ['name', 'structfunc', 'mime'])
+
+
 
 class DownloadView(View):
     #! size limit
     #data_type="csv"
-    data_type="json"
+    #data_type="json"
+    data_type="cfg"
     model_class = ChristmasSong
-        
+    model_in_filename = False
+    
     def model_to_dict(self, instance, fields=None):
         """
         Return a dict containing the data in ``instance``.
@@ -72,12 +90,36 @@ class DownloadView(View):
         encoder = json.JSONEncoder(ensure_ascii=False)
         return encoder.encode(data_dict)
 
+    def dict2cfg(self, data_dict):
+        r = None
+        config = configparser.ConfigParser()
+        config['DEFAULT'] = data_dict
+        with io.StringIO() as configfile:
+            config.write(configfile)
+            r = configfile.getvalue()
+        return r
                 
     _data_type_map = {
         'csv' : StructureData(name='csv', structfunc=dict2csv, mime='text/csv'),
-        'json' : StructureData(name='json', structfunc=dict2json, mime='application/json')
+        'json' : StructureData(name='json', structfunc=dict2json, mime='application/json'),
+        'cfg' : StructureData(name='cfg', structfunc=dict2cfg, mime='text/plain'),
     }
-        
+      
+    def destination_filename(self, pk, extension, to=None):
+        modelstr = ''
+        if (self.model_in_filename):
+            modelstr = '{}_'.format(self.model_class._meta.model_name)
+        tostr = ''
+        if (to):
+            tostr = '-{}'.format(pk)
+        filename = '{0}{1}{2}.{3}'.format(
+            modelstr, 
+            str(pk),
+            tostr, 
+            extension
+        )
+        return filename
+            
     def get(self, request, *args, **kwargs):
         pk = int(kwargs['pk'])
         obj = self.model_class.objects.get(pk=pk)
@@ -88,11 +130,7 @@ class DownloadView(View):
         data_text = structdata.structfunc(self, data_dict)
         print('data_text:')
         print(str(data_text))
-        dstfilename = '{0}-{1}.{2}'.format(
-            self.model_class._meta.model_name, 
-            str(pk), 
-            structdata.name
-        )
+        dstfilename = self.destination_filename(pk, structdata.name)
         # set content and type
         response = HttpResponse(data_text, content_type=structdata.mime)
         # Add the treat-as-file header
@@ -100,42 +138,60 @@ class DownloadView(View):
         return response
     
     
-# get the data
-#interperate as csv etc.
-#form a model
-#save
+
 
 # class factory?
 # UploadRecordView(   model=???, data_type=None)
+
+#FileTypeData = collections.namedtuple('FileTypeData', ['name', 'mime', 'extension'])
     
 class UploadRecordForm(forms.Form):
     data = forms.FileField(label='Data')
-    
+
+
+_mime_map = {
+    'text/csv' : 'csv',
+    'application/json' : 'json'
+    #'text/plain': 'cfg' 
+}
+
+_extension_map = {
+    'csv' : 'csv',
+    'json' : 'json',
+    'cfg': 'cfg',
+    'ini': 'cfg'
+}
+
 class UploadRecordCreate(CreateView):
-    # guess or state
-    # encoding = CSV, JSON
-    # what to do with wrong values?
     form_class = UploadRecordForm
     fields = ['data']
     model_class = ChristmasSong
-    data_types = ['csv', 'json']
+    data_types = ['csv', 'json', 'cfg']
     
-
     #success_url = self.return_url()
     #def handle_uploaded_file(self, f):
         #with open('some/file/name.txt', 'wb+') as destination:
             #for chunk in f.chunks():
                 #destination.write(chunk)
-    
-    def verify_type(self, fileUploadObject):
-        mime = fileUploadObject.content_type
-        # application/octet-stream
-        mimesplit = mime.split('/')
-        #if (mimesplit[0] != 'text'):
-        #    raise ValidationError("Uploaded data must be text mime:'{}'".format(mime))
-        #if (not(mimesplit[1] in self.data_types)):
-        #    raise ValidationError("Uploaded data must be from '{0}' mime:'{1}'".format(','.join(self.data_types), mime))            
-        return mimesplit[1]
+    def model_fieldnames(self):
+        fields = [f.name for f in self.model_class._meta.get_fields()]
+        fields.remove(self.model_class._meta.pk.name)
+        return fields
+        
+                
+    def get_type(self, uploadfile):
+        tpe = None
+        # try MIME
+        mime = uploadfile.content_type
+        tpe = _mime_map.get(mime)
+        if (not tpe):
+            # failed on mime, try extension
+            base = os.path.basename(uploadfile.name)
+            extension = base.rsplit('.', 1)[1]
+            tpe = _extension_map.get(extension)
+            if (not tpe):
+              raise ValidationError("Failed to identify uploaded file from mime or extension mime:'{0}' extension:'{1}'".format(mime, extension))
+        return tpe
         
     def binaryToUTF8Iter(self, fileUploadObject):
         for line in fileUploadObject:
@@ -162,35 +218,52 @@ class UploadRecordCreate(CreateView):
         #print(str(r))
         return r
 
+    def cfg2dict(self, data):
+        b = {}
+        config = configparser.ConfigParser()
+        config.read('example.ini')
+        for instance in config.sections():
+           ib = {}
+           for field in model_fieldnames():
+              ib[field] = config[instance][field]
+           b[instance] = ib
+        return b
+
+    def cfg2dictInstance(self, uploadfile):
+        b = {}
+        #s = ''.join(uploadfile)
+        config = configparser.ConfigParser()
+        #config.read_string(s)
+        config.read_file(self.binaryToUTF8Iter(uploadfile))
+        print('model_fieldnames')
+        print(str(self.model_fieldnames()))
+        for field in self.model_fieldnames():
+            b[field] = config[field]
+        return b
+        
     _data_type_map = {
         'csv' : StructureData(name='csv', structfunc=csv2dict, mime='text/csv'),
-        'json' : StructureData(name='json', structfunc=json2dict, mime='application/json')
+        'json' : StructureData(name='json', structfunc=json2dict, mime='application/json'),
+        'cfg' : StructureData(name='cfg', structfunc=cfg2dictInstance, mime='text/plain')
     }    
+    
     def fail_action(self, form):
         print('fail')
         print(form)
 
     def success_action(self, form):
         obj = None
-        #try:
-        data = self.request.FILES['data']
-        print('sucess:')
-        data_type = self.verify_type(data)
-        print(str(data.content_type))
+        uploadfile = self.request.FILES['data']
+        data_type = self.get_type(uploadfile)
+        #print(str(uploadfile.content_type))
         #UploadedFile.charset¶
         #for line in data:
         #    print(line)
         structdata = self._data_type_map[data_type]
-        data_dict = structdata.structfunc(self, data)
-        #d = self.csv2dict(data)
+        data_dict = structdata.structfunc(self, uploadfile)
         obj = self.model_class(**data_dict)
         print(str(obj))
         #obj.save()
-        #except Exception as err:
-            #! fix
-            #! write error message
-            #err.__traceback__.print_tb()
-        #    traceback.print_tb(err.__traceback__, limit=1)
         return obj
 
      
