@@ -1,6 +1,6 @@
-Testtable
-=========
-Upload and download data structured as records (model instances) direct to Django instalations.
+Updownrecord
+============
+Upload and download data to a Django installation via web forms. The data is structured as records (model instances) that can be in various formats ('ini', 'json' etc.).
 
 
 When to use this application
@@ -19,6 +19,8 @@ The reverse ability, to download a record from a remote location, provides a way
 Limitations
 -----------
 (currently) Only one record
+
+Self contained record only (ignores foreign keys) 
 
 
 Requires

@@ -1,6 +1,8 @@
 import csv
 import json
 import configparser
+from xml.etree.ElementTree import XMLParser
+import xml.etree.ElementTree as ET
 
 import io
 import collections
@@ -24,7 +26,6 @@ from django.views.generic import View
 #? use pk or not
 #? save ranges too
 #? headers in CSV
-#? do init files
 #? guess or state for upload
 #? state or offer for download
 #? how about updating too?
@@ -32,9 +33,9 @@ from django.views.generic import View
 #? Admin protection
 #? check charsets
 #? XML
-#! I always lean towards id only for filenames? Offer choice?
-
-
+#? Just a parser for csv and JSON?
+#? data can be more abstract?
+#? Should handle with/without pks
 
 StructureData = collections.namedtuple('StructureData', ['name', 'structfunc', 'mime'])
 
@@ -44,10 +45,14 @@ class DownloadView(View):
     #! size limit
     #data_type="csv"
     #data_type="json"
-    data_type="cfg"
+    #data_type="cfg"
+    data_type="xml"
     model_class = ChristmasSong
     model_in_filename = False
     
+    def model_name(self):
+        return self.model_class._meta.model_name
+        
     def model_to_dict(self, instance, fields=None):
         """
         Return a dict containing the data in ``instance``.
@@ -98,11 +103,23 @@ class DownloadView(View):
             config.write(configfile)
             r = configfile.getvalue()
         return r
-                
+
+    def dict2xml(self, data_dict):
+        b = []
+        b.append('<?xml version = "1.0" encoding = "UTF-8"?>')
+        #! put the id as an attribute
+        b.append('<{}>'.format( self.model_name()))
+        for k, v in data_dict.items():
+            b.append('<{0}>{1}</{0}>'.format(k, v))
+        b.append('</{}>'.format( self.model_name()))
+        return ''.join(b)
+
+
     _data_type_map = {
         'csv' : StructureData(name='csv', structfunc=dict2csv, mime='text/csv'),
         'json' : StructureData(name='json', structfunc=dict2json, mime='application/json'),
         'cfg' : StructureData(name='cfg', structfunc=dict2cfg, mime='text/plain'),
+        'xml' : StructureData(name='xml', structfunc=dict2xml, mime='text/xml'),
     }
       
     def destination_filename(self, pk, extension, to=None):
@@ -151,15 +168,18 @@ class UploadRecordForm(forms.Form):
 
 _mime_map = {
     'text/csv' : 'csv',
-    'application/json' : 'json'
-    #'text/plain': 'cfg' 
+    'text/json' : 'json',
+    'application/json' : 'json',
+    'text/xml' : 'xml',
+    'application/xml' : 'xml'
 }
 
 _extension_map = {
     'csv' : 'csv',
     'json' : 'json',
     'cfg': 'cfg',
-    'ini': 'cfg'
+    'ini': 'cfg',
+    'xml': 'xml'
 }
 
 class UploadRecordCreate(CreateView):
@@ -240,11 +260,20 @@ class UploadRecordCreate(CreateView):
         for field in self.model_fieldnames():
             b[field] = config[field]
         return b
-        
+
+
+    def xml2dictInstance(self, uploadfile):
+        b = {}
+        root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
+        for child in root:
+            b[child.tag] = child.text
+        return b
+                
     _data_type_map = {
         'csv' : StructureData(name='csv', structfunc=csv2dict, mime='text/csv'),
         'json' : StructureData(name='json', structfunc=json2dict, mime='application/json'),
-        'cfg' : StructureData(name='cfg', structfunc=cfg2dictInstance, mime='text/plain')
+        'cfg' : StructureData(name='cfg', structfunc=cfg2dictInstance, mime='text/plain'),
+        'xml' : StructureData(name='xml', structfunc=xml2dictInstance, mime='text/xml')
     }    
     
     def fail_action(self, form):
@@ -261,8 +290,10 @@ class UploadRecordCreate(CreateView):
         #    print(line)
         structdata = self._data_type_map[data_type]
         data_dict = structdata.structfunc(self, uploadfile)
+        print('data_dict')
+        print(str(data_dict))
         obj = self.model_class(**data_dict)
-        print(str(obj))
+        #print(str(obj))
         #obj.save()
         return obj
 
