@@ -25,28 +25,38 @@ from django.views.generic import View
 #? get a 'SaveAs'
 #? use pk or not
 #? save ranges too
-#? headers in CSV
+#? headers in CSV (yes)
 #? guess or state for upload
 #? state or offer for download
 #? how about updating too?
 #? size limitations
 #? Admin protection
 #? check charsets
-#? XML
 #? Just a parser for csv and JSON?
 #? data can be more abstract?
 #? Should handle with/without pks
-
+#? allow args (e.g dialect to CSV dictwriter)
+'''
+== CSV
+CSV is the only storage type which does not by default implement key to 
+value (it can rely on knowing the structure to read into).
+This is a problem, because we would like to implement the Django 
+convention of 'if there is a pk, insert, if not, create'. Without keys
+we get into difficult territory; counting fields to guess if a pk is 
+present. All in all, the best bet seems to be to insist that CSV files
+have a header (which is easily added). This means also we can then have 
+the same approach to data structure across all representations. 
+'''
 StructureData = collections.namedtuple('StructureData', ['name', 'structfunc', 'mime'])
 
 
 
 class DownloadView(View):
     #! size limit
-    #data_type="csv"
+    data_type="csv"
     #data_type="json"
     #data_type="cfg"
-    data_type="xml"
+    #data_type="xml"
     model_class = ChristmasSong
     model_in_filename = False
     
@@ -73,20 +83,20 @@ class DownloadView(View):
         fields = [f.name for f in self.model_class._meta.get_fields()]
         fields.remove(self.model_class._meta.pk.name)
         print(str(fields))
-        strB = io.StringIO()
-        writer = csv.DictWriter(strB, fieldnames=fields)
+        so = io.StringIO()
+        writer = csv.DictWriter(so, fieldnames=fields)
         #{'gift': 'Turtle doves'}
-
+        writer.writeheader()
         # Only need first line
         writer.writerow(data_dict)
-        writer.writerow({'gift': 'Dogs a baying'})
+        #writer.writerow({'gift': 'Dogs a baying'})
         print('strB:')
         #print(str(strB. getvalue()))
 
         print('csv out:')
         #strB.flush()
-        r = strB.getvalue()
-        strB.close()
+        r = so.getvalue()
+        so.close()
         print(str(r))
         return ''.join(r)
 
@@ -106,12 +116,12 @@ class DownloadView(View):
 
     def dict2xml(self, data_dict):
         b = []
-        b.append('<?xml version = "1.0" encoding = "UTF-8"?>')
+        b.append('<?xml version = "1.0" encoding = "UTF-8"?>\n')
         #! put the id as an attribute
-        b.append('<{}>'.format( self.model_name()))
+        b.append('<{}>\n'.format( self.model_name()))
         for k, v in data_dict.items():
-            b.append('<{0}>{1}</{0}>'.format(k, v))
-        b.append('</{}>'.format( self.model_name()))
+            b.append('    <{0}>{1}</{0}>\n'.format(k, v))
+        b.append('</{}>\n'.format( self.model_name()))
         return ''.join(b)
 
 
@@ -166,6 +176,11 @@ class UploadRecordForm(forms.Form):
     data = forms.FileField(label='Data')
 
 
+# These two dicts are for purposes of identifying files.
+# The data has no need to be complete. If data is provided,
+# it should be a close guess at intention (e.g. do not try to make all 
+# 'text/' mimes into config files. But 'text/xml' wants to be known as 
+# XML)
 _mime_map = {
     'text/csv' : 'csv',
     'text/json' : 'json',
@@ -227,11 +242,8 @@ class UploadRecordCreate(CreateView):
         return decoder.decode(self.binaryToUTF8Str(s))
         
     def csv2dict(self, data):
-        #print(str(data))
-        fields = [f.name for f in self.model_class._meta.get_fields()]
-        fields.remove(self.model_class._meta.pk.name)
-        #print(str(fields))
-        reader = csv.DictReader(self.binaryToUTF8Iter(data), fieldnames=fields)
+        # if CSV has headers, this reads ok
+        reader = csv.DictReader(self.binaryToUTF8Iter(data))
         # Only need first line
         r = reader.__next__()
         #print('csv out:')
