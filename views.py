@@ -8,6 +8,7 @@ import io
 import collections
 import os
 from itertools import chain
+import math
 
 import traceback
 from django.shortcuts import render
@@ -38,7 +39,7 @@ from django.views.generic import View
 #? allow args (e.g dialect to CSV dictwriter)
 #? redirect or something on DownloadView
 #? add app name as well as model name to the pk
-#? queryset, not 'to'. How to pass as parameter?
+#? format page filename
 '''
 == Structured output and input
 The app can handle both single objects and a range of pks (though not,
@@ -83,10 +84,28 @@ StructureData = collections.namedtuple('StructureData', ['name', 'detailfunc', '
 
 class DownloadView(View):
     '''
-    Offered filenames are the pk of the source record, or for a
-    queryset, the pk range. They are not unique identifiers. If you wish
-    to prefix the offered filename with the model name, which makes the 
-    filename closer to a unique name, set 'model_in_filename=True'.
+    By default the view downloads a record selected by pk_url_kwarg
+    
+    If 'pk_url_kwarg = None' the view looks at queryset data. If the
+    queryset has been defined, that is used (refreshing every time).
+     
+    If queryset is also None, the view pages the model data, selecting 
+    by queryset_url_page_kwarg and queryset_page_size. 
+    queryset_url_page_kwarg is sought in the query string, not the url 
+    path e.g. ::
+    
+    http://127.0.0.1:8000/firework/download?page=2 
+        
+    Offered filenames are: for a single object, the pk of the source record.
+    For a paged queryset 'page-[?]'. For a custom queryset, 'query' 
+    (overridable on selection_id). Filenames are not intended as unique 
+    identifiers. 
+    
+    If you wish to prefix the offered filename with the model name, 
+    which makes the filename closer to a unique name, set 
+    'model_in_filename=True'.
+    
+    @param pk_url_kwarg name of argument for pks
     @param model_in_filename prefix the filename with the model name
     '''
     #! size limit
@@ -96,13 +115,13 @@ class DownloadView(View):
     #data_type="xml"
     model_class = ChristmasSong
     pk_url_kwarg = 'pk'
-    queryset_url_kwarg = None
     queryset = None
+    queryset_url_page_kwarg = 'page'
+    queryset_page_size = 2
+    selection_id = 'query'
     include_pk = True
     #include_pk = False
     model_in_filename = False
-    
-    #if callable(list_filter):
 
     def model_name(self):
         return self.model_class._meta.model_name
@@ -120,7 +139,65 @@ class DownloadView(View):
         if (not self.include_pk):
             fields.remove(opts.pk.name)
         return fields
+
+    def get_queryset(self):
+        """
+        Return the list of items for this view.
+
+        The return value must be an iterable and may be an instance of
+        `QuerySet` in which case `QuerySet` specific behavior will be enabled.
         
+        The default is to assemble a 'page' of data, delimited by 
+        'queryset_page_size' and URL defined by 'queryset_url_page_kwarg'
+        If a URL arg can not be found, the queryset defaults to page 1.
+        
+        This method can be overridden to become dynamic i.e. respond
+        to URL parameters. One way to pass query parameeters is to use a
+        query string. The request is held on the class as 
+        'self.request'. To access, use code like, ::
+            selector = request.GET.get('somekwarg', None)
+        Another way would be to use a subpathed URL parameter,
+            firework/dowload/page/...            
+        Then do a filter on the model manager and return. In this way
+        the download view can offer to users the ability to, for exaple,
+        download items 'authored by...' etc. 
+        
+        Please consider: if you gather URL parameters in this way, you 
+        are responsible for validation (though the Django URL regex is 
+        a good start).
+        """
+        if self.queryset is not None:
+            queryset = self.queryset
+            if isinstance(queryset, QuerySet):
+                queryset = queryset.all()
+        elif self.model_class is not None:
+            try:
+                #page = int(self.kwargs[self.queryset_url_page_kwarg])
+                page = int(self.request.GET.get(self.queryset_url_page_kwarg, '1'))
+            except Exception:
+                # ignore, default to 1
+                page = 1
+            if (page < 1):
+                raise Http404("Invalid page '{}'".format(
+                    page
+                ))
+            frm = ((page - 1) * self.queryset_page_size) + 1
+            # NB: range is inclusive, 'to', we need our end to be 
+            # 'until', so -1
+            to = frm + (self.queryset_page_size - 1)
+            queryset = self.model_class._default_manager.filter(pk__range=(frm, to))
+            self.selection_id = 'page-{}'.format(page)
+        else:
+            raise ImproperlyConfigured(
+                "{} is missing a QuerySet. Define "
+                "().pk_url_kwarg (for single items), %(cls)s.queryset, or override "
+                "().get_queryset().".format(
+                    self.__class__.__name__
+                )
+            )
+        return queryset
+
+
     def obj_to_dict(self, instance, fields=None):
         """
         Return a dict containing the data in ``instance``.
@@ -238,42 +315,48 @@ class DownloadView(View):
         ),
     }
       
-    def destination_filename(self, pk, extension, to=None):
+    def destination_filename(self, selection_id, extension, to=None):
         modelstr = ''
         if (self.model_in_filename):
             modelstr = '{}_'.format(self.model_class._meta.model_name)
-        tostr = ''
-        if (to):
-            tostr = '-{}'.format(pk)
-        filename = '{0}{1}{2}.{3}'.format(
+        filename = '{0}{1}.{2}'.format(
             modelstr, 
-            str(pk),
-            tostr, 
+            selection_id,
             extension
         )
         return filename
             
     def get(self, request, *args, **kwargs):
-        pk = int(kwargs[self.pk_url_kwarg])
         structdata = self._data_type_map[self.data_type]
-        if (self.queryset_url_kwarg):
-            selector = int(kwargs[self.queryset_url_kwarg])
-            if (not isinstance(selector, dict)):
-                raise ImproperlyConfigured(
-                'Queryset selector must be a dict'
-                )
-            qs = self.model_class.objects.filter(**selector)
-            data_dict = [self.obj_to_dict(obj) for obj in qs]
-            data_text = structdata.qsfunc(self, data_dict)
-        else:
-            obj = self.model_class.objects.get(pk=pk)
-        #print(str(obj))
+        if (self.pk_url_kwarg):
+            pk = int(kwargs[self.pk_url_kwarg])
+            obj = self.model_class._default_manager.get(pk=pk)
+            #print(str(obj))
             data_dict = self.obj_to_dict(obj)
             #print(str(data_dict))
             data_text = structdata.detailfunc(self, data_dict)
+            self.selection_id = str(pk)
+        else:
+            #selector = int(kwargs[self.queryset_url_page_kwarg])
+            #selector = request.GET.get(self.queryset_url_page_kwarg, None)
+            #if (not self.queryset):
+                #qs = self.model_class._default_manager.all()
+                #selection_id = 'all'
+            #else:
+                ##qs = self.model_class._default_manager.filter(selector)
+                #selection_id = 'query'
+            qs = self.get_queryset()
+
+            #if (not isinstance(selector, dict)):
+                #raise ImproperlyConfigured(
+                #'Queryset selector must be a dict'
+                #)
+            #qs = self.model_class._default_manager.filter(**selector)
+            data_dict = [self.obj_to_dict(obj) for obj in qs]
+            data_text = structdata.qsfunc(self, data_dict)
         print('data_text:')
         print(str(data_text))
-        dstfilename = self.destination_filename(pk, structdata.name)
+        dstfilename = self.destination_filename(self.selection_id, structdata.name)
         # set content and type
         response = HttpResponse(data_text, content_type=structdata.mime)
         # Add the treat-as-file header
