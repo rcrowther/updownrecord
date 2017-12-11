@@ -117,7 +117,7 @@ class DownloadRecordView(View):
     use_querysets = False
     queryset = None
     queryset_url_page_kwarg = 'page'
-    queryset_page_size = 4
+    queryset_page_size = 25
     selection_id = 'query'
     include_pk = True
     model_in_filename = False

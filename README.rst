@@ -24,7 +24,7 @@ Only handles CSV, CFG (microsoft '.ini'), JSON, and XML (that's a limitation? So
 
 Text encoding must be UTF-8
 
-High performance? Not likely. API first.
+High performance? Not likely.
 
 
 Requires
