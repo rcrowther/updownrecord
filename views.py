@@ -17,38 +17,40 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from quickviews import ModelCreateView, CreateView
-from paper.models import Paper
-from testtable.models import ChristmasSong
 
 
 from django.http import HttpResponse, StreamingHttpResponse
 from django.views.generic import View
 
-#? get a 'SaveAs'
-#? pk detection more than model._meta.pk, I recall
-#? guess or state for upload
-#? state or offer for download
-#? how about updating too?
-#? size limitations
-#? Admin protection
-#? check charsets
-#? Just a parser for csv and JSON?
-#? data can be more abstract?
-#? allow args (e.g dialect to CSV dictwriter)
-#? redirect or something on DownloadView
-#? add app name as well as model name to the pk
-#? format page filename
+
 '''
-== Structured output and input
-The app can handle both single objects and a range of pks (though not,
-currently, a queryset)
+== Structure of data
+The app can handle both single objects and querysets.
 When handling a queryset, the data will be structured, pseudo-code, as
 Array(Map(modelfieldname -> modelfieldvalue)).
-For consistent handling, though a little more extensive for single items
-than necessary, single items are written and retrieved as though in an 
-array of one item.
+When handling an object, the data will be structured, pseudo-code, as
+Array(Map(modelfieldname -> modelfieldvalue))..
 For how each data style represents the structure, see the following
 notes. 
+
+When objects need named ids for the group (CFG Detail/JSON) these are 
+set to the model name. When this is not possible because the group names 
+must be unique (CFG Queryset) they are simple index numerics.
+
+The details of any group names are not relevant to the app. The code 
+is only looking for a single group, or list of groups, of tag pairs. 
+These are used to populate object fields.
+
+=== CFG
+CFG (Windows 'ini') can only represent group labels and key->values 
+(sometimes with a group of default values).
+This app assumes that the CFG file itself represents an array, and that
+each group contained is an object.
+
+CFG will not allow group names to be repeated, so they are indexed
+(pks are in the data lines). 
+ 
+PKs are data lines, not group labels. See the similar argument for XML.
 
 == CSV
 CSV is the only storage type which does not by default implement key to 
@@ -57,24 +59,23 @@ This is a problem, because we would like to implement the Django
 convention of 'if there is a pk, insert, if not, create'. Without keys
 we get into difficult territory; counting fields to guess if a pk is 
 present. All in all, the best bet seems to be to insist that CSV files
-have a header (which is easily added). This means also we can then have 
-the same approach to data structure across all representations. 
+have a header (which is easily added). 
+
+== JSON
+JSON presents the least problems, as it can represent the structure 
+naturally.
+
 == XML
+An XML file requires a root, so one element set represents that.
+
+For detail, the field pairs are within the root.
+
+For queryset, tag sets for each object are within the root.
+
 On the basis that, though they are atomic (and often auto-integers), 
 Django PKs are primary information (not meta information), pks are
 elements, not attributes,
 https://stackoverflow.com/questions/152313/xml-attributes-vs-elements
-=== CFG
-CFG (Windows 'ini') can only represent group labels and key->values 
-(sometimes with a group of default values).
-This app assumes that the CFG file itself represents an array, and that
-each group contained is an object.
- 
-PKs are data lines, not group labels. See the similar argument for XML.
-The group title must then identify an object. Yet, for CFG, a group 
-label must be unique. The solution is to auto-number the labels. Bear in
-mind these group-label numbers are not data, they are index numerics.
-Similar to an explicit array index.
 '''
 StructureData = collections.namedtuple('StructureData', ['name', 'detailfunc', 'qsfunc', 'mime'])
 
@@ -111,7 +112,7 @@ class DownloadRecordView(View):
     data_type="json"
     #data_type="cfg"
     #data_type="xml"
-    model_class = ChristmasSong
+    model_class = None
     pk_url_kwarg = 'pk'
     use_querysets = False
     queryset = None
@@ -119,7 +120,6 @@ class DownloadRecordView(View):
     queryset_page_size = 4
     selection_id = 'query'
     include_pk = True
-    #include_pk = False
     model_in_filename = False
 
     def model_name(self):
@@ -382,9 +382,15 @@ _extension_map = {
 
 class UploadRecordView(CreateView):
     '''
+    Simple form to upload structured data to a model.
+    
+    The data must fit some loose conditions, outlines in detail in the
+    app documentation.
+
+    @param data_types limit the dta types (beyond the ability to process)
+    @param file_size_limit in MB (e.g. value = 2 is 2MB)
     '''
-    fields = ['data']
-    model_class = ChristmasSong
+    model_class = None
     data_types = ['cfg', 'csv', 'json', 'xml']
     force_insert = True
     file_size_limit = 2
@@ -405,8 +411,9 @@ class UploadRecordView(CreateView):
             extension = base.rsplit('.', 1)[1]
             tpe = _extension_map.get(extension)
             if (not tpe):
-              #? 404, cause not in validation
-              raise ValidationError("Failed to identify uploaded file from mime or extension mime:'{0}' extension:'{1}'".format(mime, extension))
+                raise Http404("Failed to identify uploaded file from mime or extension mime:'{0}' extension:'{1}'".format(mime, extension))
+        if (not(tpe in self.data_types)):
+             raise Http404('File type not accepted.')
         return tpe
         
     def binaryToUTF8Iter(self, fileUploadObject):
@@ -422,19 +429,16 @@ class UploadRecordView(CreateView):
         for k, v in parser[section_name].items():
             b[k] = v
         return b
-
-    def cfg2dictlist(self, sections):
-        l = []
-        for section_name in sections:
-            l.append(self._cfg2obj(parser, section_name))
-        return l
                         
     def cfg2python(self, uploadfile):
         parser = configparser.ConfigParser()
         parser.read_file(self.binaryToUTF8Iter(uploadfile))
         sections = parser.sections()
         if (len(sections) > 1):
-            return self.cfg2dictlist(parser, sections) 
+            l = []
+            for section_name in sections:
+                l.append(self._cfg2dict(parser, section_name))
+            return l 
         else:
             return self._cfg2dict(parser, sections[0])
 

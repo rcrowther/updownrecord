@@ -1,0 +1,11 @@
+#? get a 'SaveAs'
+#? pk detection more than model._meta.pk, I recall
+#? guess or state for upload
+#? state or offer for download
+#? size limitations on download
+#? Admin protection
+#? check charsets
+#? allow args (e.g dialect to CSV dictwriter)
+#? redirect or something on DownloadView
+#? add app name as well as model name to the pk
+#? format page filename
