@@ -80,7 +80,7 @@ StructureData = collections.namedtuple('StructureData', ['name', 'detailfunc', '
 
 
 
-class DownloadView(View):
+class DownloadRecordView(View):
     '''
     By default the view downloads a record selected by pk_url_kwarg
     
@@ -321,25 +321,17 @@ class DownloadView(View):
             
     def get(self, request, *args, **kwargs):
         fields = self.model_fields()
-        print('::::::::fields:')
-        print(str(fields))
         structdata = self._data_type_map[self.data_type]
         if (not self.use_querysets):
             pk = int(kwargs[self.pk_url_kwarg])
             obj = self.model_class._default_manager.get(pk=pk)
-            #print(str(obj))
             data_dict = self.obj_to_dict(fields, obj)
-            #print(str(data_dict))
             data_text = structdata.detailfunc(self, data_dict)
             self.selection_id = str(pk)
         else:
-            qs = self.get_queryset()
-            #print('qs:')
-            #print(str(qs))            
+            qs = self.get_queryset()           
             data_dict = [self.obj_to_dict(fields, obj) for obj in qs]
             data_text = structdata.qsfunc(self, data_dict)
-        print('data_text:')
-        print(str(data_text))
         dstfilename = self.destination_filename(self.selection_id, structdata.name)
         # set content and type
         response = HttpResponse(data_text, content_type=structdata.mime)
@@ -349,14 +341,20 @@ class DownloadView(View):
     
     
 
+from django.core.exceptions import ValidationError
 
-# class factory?
-# UploadRecordView(   model=???, data_type=None)
+def get_upload_form(file_size_limit=None):
+    class _UploadRecordForm(forms.Form):
+        def file_size(value):
+            if (file_size_limit):
+                limit = file_size_limit * 1024 * 1024
+                if value.size > limit:
+                    raise ValidationError('File too large. Size should not exceed {} MB.'.format(
+                        file_size_limit
+                    ))
+        data = forms.FileField(label='Data', validators=[file_size])
+    return _UploadRecordForm
 
-#FileTypeData = collections.namedtuple('FileTypeData', ['name', 'mime', 'extension'])
-    
-class UploadRecordForm(forms.Form):
-    data = forms.FileField(label='Data')
 
 
 # These two dicts are for purposes of identifying files.
@@ -382,26 +380,20 @@ _extension_map = {
 
 
 
-class UploadRecordSave(CreateView):
+class UploadRecordView(CreateView):
     '''
     '''
-    form_class = UploadRecordForm
     fields = ['data']
     model_class = ChristmasSong
-    data_types = ['csv', 'json', 'cfg']
-    
+    data_types = ['cfg', 'csv', 'json', 'xml']
+    force_insert = True
+    file_size_limit = 2
     #success_url = self.return_url()
-    #def handle_uploaded_file(self, f):
-        #with open('some/file/name.txt', 'wb+') as destination:
-            #for chunk in f.chunks():
-                #destination.write(chunk)
-    #? x
-    def model_fieldnames(self):
-        fields = [f.name for f in self.model_class._meta.get_fields()]
-        fields.remove(self.model_class._meta.pk.name)
-        return fields
+
+    def get_form(self, form_class=None):
+        form_class = get_upload_form(self.file_size_limit)
+        return super().get_form(form_class)
         
-                
     def get_type(self, uploadfile):
         tpe = None
         # try MIME
@@ -413,6 +405,7 @@ class UploadRecordSave(CreateView):
             extension = base.rsplit('.', 1)[1]
             tpe = _extension_map.get(extension)
             if (not tpe):
+              #? 404, cause not in validation
               raise ValidationError("Failed to identify uploaded file from mime or extension mime:'{0}' extension:'{1}'".format(mime, extension))
         return tpe
         
@@ -421,80 +414,126 @@ class UploadRecordSave(CreateView):
             yield line.decode('utf-8')
             
     def binaryToUTF8Str(self, fileUploadObject):
-        #! protect
         s = fileUploadObject.read()
         return s.decode('utf-8')
-        
-    def json2dict(self, data):
-        decoder = json.JSONDecoder(strict=True, object_pairs_hook=collections.OrderedDict())
-        return decoder.decode(self.binaryToUTF8Str(s))
-        
-    def csv2dict(self, data):
+
+    def _cfg2dict(self, parser, section_name):
+        b = {}
+        for k, v in parser[section_name].items():
+            b[k] = v
+        return b
+
+    def cfg2dictlist(self, sections):
+        l = []
+        for section_name in sections:
+            l.append(self._cfg2obj(parser, section_name))
+        return l
+                        
+    def cfg2python(self, uploadfile):
+        parser = configparser.ConfigParser()
+        parser.read_file(self.binaryToUTF8Iter(uploadfile))
+        sections = parser.sections()
+        if (len(sections) > 1):
+            return self.cfg2dictlist(parser, sections) 
+        else:
+            return self._cfg2dict(parser, sections[0])
+
+    def csv2python(self, uploadfile):
         # if CSV has headers, this reads ok
-        reader = csv.DictReader(self.binaryToUTF8Iter(data))
-        # Only need first line
-        r = reader.__next__()
-        #print('csv out:')
-        #print(str(r))
-        return r
+        reader = csv.DictReader(self.binaryToUTF8Iter(uploadfile))
+        l = [obj_dict for obj_dict in reader]
+        if (len(l) > 1):
+            return l
+        else:
+            # if only one, strip the object_dict out of the list
+            return l[0]
 
-    def cfg2dict(self, data):
+    # Note on the JSON implementation
+    # This is nice, but handles as a chunk 
+    def json2python(self, uploadfile):
+        decoder = json.JSONDecoder(strict=True) #object_pairs_hook=collections.OrderedDict)
+        l = decoder.decode(self.binaryToUTF8Str(uploadfile))
+        return l
+        
+
+    from xml.etree.ElementTree import XMLParser
+    class DetectStarts():
+        depth = 0
+        closed = False
+        def start(self, tag, attrib):
+            if (not self.closed):
+                self.depth += 1
+        def end(self, tag):
+            self.closed = True          
+        def depth_decided(self):
+            return self.closed
+
+    def xml_find_depth(self, file_iter):
+        ds = self.DetectStarts()
+        parser = XMLParser(target=ds)
+        for l in file_iter:
+            parser.feed(l)
+            if (ds.depth_decided()):
+                break
+        return ds.depth
+
+    def _xml2dict(self, object_tag):
         b = {}
-        config = configparser.ConfigParser()
-        config.read('example.ini')
-        for instance in config.sections():
-           ib = {}
-           for field in model_fieldnames():
-              ib[field] = config[instance][field]
-           b[instance] = ib
-        return b
-
-    def cfg2dictInstance(self, uploadfile):
-        b = {}
-        #s = ''.join(uploadfile)
-        config = configparser.ConfigParser()
-        #config.read_string(s)
-        config.read_file(self.binaryToUTF8Iter(uploadfile))
-        print('model_fieldnames')
-        print(str(self.model_fieldnames()))
-        for field in self.model_fieldnames():
-            b[field] = config[field]
-        return b
-
-
-    def xml2dictInstance(self, uploadfile):
-        b = {}
-        root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
-        for child in root:
+        for child in object_tag:
             b[child.tag] = child.text
         return b
-                
+                        
+    # Note on the XML implementation
+    # Python's builtin XML parsers are ...not designed for this.
+    # The current implementation is ugly (has_child traversal, 
+    # where are you?)
+    # The current implementation is also not robust, depending on 
+    # tag depths constructed as per instructions. However,
+    # we require our format for other styles, even if the XML 
+    # iumplementation is particularly weak (blame XML itself here, too)
+    # So this is adequate. For now. R.C.  
+    def xml2python(self, uploadfile):
+        depth = self.xml_find_depth(self.binaryToUTF8Iter(uploadfile))
+        if (depth > 2):
+            # we assume that is object descriptions and their container
+            # i.e. queryset
+            l = []
+            root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
+            for obj in root:
+                l.append(self._xml2dict(obj))
+            return l
+        else:
+            # assume container with object fields i.e. detail
+            root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
+            return self._xml2dict(root)
+
     _data_type_map = {
-        'csv' : StructureData(name='csv', detailfunc=csv2dict, qsfunc=None, mime='text/csv'),
-        'json' : StructureData(name='json', detailfunc=json2dict, qsfunc=None, mime='application/json'),
-        'cfg' : StructureData(name='cfg', detailfunc=cfg2dictInstance, qsfunc=None, mime='text/plain'),
-        'xml' : StructureData(name='xml', detailfunc=xml2dictInstance, qsfunc=None, mime='text/xml')
+        'cfg' : StructureData(name='cfg', detailfunc=cfg2python, qsfunc=None, mime='text/plain'),
+        'csv' : StructureData(name='csv', detailfunc=csv2python, qsfunc=None, mime='text/csv'),
+        'json' : StructureData(name='json', detailfunc=json2python, qsfunc=None, mime='application/json'),
+        'xml' : StructureData(name='xml', detailfunc=xml2python, qsfunc=None, mime='text/xml')
     }    
     
-    def fail_action(self, form):
-        print('fail')
-        print(form)
+    #def fail_action(self, form):
+    #    print('fail')
+    #    print(form)
 
     def success_action(self, form):
         obj = None
         uploadfile = self.request.FILES['data']
         data_type = self.get_type(uploadfile)
-        #print(str(uploadfile.content_type))
-        #UploadedFile.charset¶
-        #for line in data:
-        #    print(line)
         structdata = self._data_type_map[data_type]
-        data_dict = structdata.detailfunc(self, uploadfile)
-        print('data_dict')
-        print(str(data_dict))
-        obj = self.model_class(**data_dict)
-        #print(str(obj))
-        #obj.save()
+        data = structdata.detailfunc(self, uploadfile)
+        #print('data')
+        #print(str(data))
+        if isinstance(data, list):
+            #?use bulk save?
+            for obj_dict in data:
+                obj = self.model_class(**obj_dict)
+                #obj.save(force_insert=self.force_insert)
+        else:
+            obj = self.model_class(**data)
+            #obj.save(force_insert=self.force_insert)
         return obj
 
      

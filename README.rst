@@ -18,9 +18,13 @@ The reverse ability, to download a record from a remote location, provides a way
 
 Limitations
 -----------
-Self contained records only (ignores foreign keys) 
+Self-contained records only (foreign keys are unsupported) 
 
 Only handles CSV, CFG (microsoft '.ini'), JSON, and XML (that's a limitation? Someone will probably think so).
+
+Text encoding must be UTF-8
+
+High performance? Not likely. API first.
 
 
 Requires
@@ -31,6 +35,20 @@ quickviews_
 Alternatives
 ------------
 What? Umm, an SQL script? Fabric? All the rest of that database maintenance equipment?
+
+
+Status
+------
+This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, and a constantly changing API.
+
+Do not rely on the API. Fortunately, the app is a leaf node, ending with users. No need to worry about dependancies.
+
+
+About data structuring
+----------------------
+The code contains extensive notes. In short, each download is resolved into a structure something like, for an object, object-as-dict; and for a queryset, list(object-as-dict()).
+
+Uploads are treated in a similar way. This will not work for all data. For example, it is unusual to use 'ini' type files for consecutive record storage (this app enables that). Or, the SaveRecordView can not handle Microsoft Excel CSV output. However, all the handled formats are taxt-based, so they should be easy to edit into a form where they will upload.
 
 
 Install
