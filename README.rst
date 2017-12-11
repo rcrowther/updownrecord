@@ -47,23 +47,24 @@ Usage
 -----
 Download
 ~~~~~~~~
-Enable a view. Simple views in one line in a URL, ::
+Enable a view. One line in a URL (if not complicated configuration), ::
 
     from updownrecord import views
 
     url(r'^download/(?P<pk>[0-9]+)$', views.DownloadView.as_view(model=Firework, data_type="csv")),
 
-Now download object pk=9 as CSV, ::
+(that line uses the default url parameter name of 'pk') Now download object pk=9 as CSV, ::
 
     http://127.0.0.1:8000/firework/download/9
 
-There are a surprising number of options on Download view (it has an API with some similarity to Django's ListView). It can be set to download 'page' ranges, ::
+There are a surprising number of options on DownloadView (it has an API with some similarity to Django's ListView). It can be set to download 'page' ranges, ::
 
-    url(r'^download/$', views.DownloadView.as_view(pk_url_kwarg=None, data_type="json")),
+    url(r'^download/$', views.DownloadView.as_view(use_querysets=True, data_type="json")),
 
-Note how 'pk_url_kwarg' has been nullified to trigger queryset handling. By default, queryset handling is from the URL querystring, pages are 25 objects. So, to download items pk 50-75 as JSON, ::
+Note the use of the explicit 'use_querysets' value to trigger queryset handling. By default, queryset handling is from the URL querystring, pages are 25 objects. So, to download items pk=50-75 as JSON, ::
  
     http://127.0.0.1:8000/updownrecord/download?page=2 
 
+Queryset handling can be overrdden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
 
 .. _quickviews: https://github.com/rcrowther/quickviews

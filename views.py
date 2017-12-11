@@ -9,6 +9,7 @@ import collections
 import os
 from itertools import chain
 import math
+import copy
 
 import traceback
 from django.shortcuts import render
@@ -25,8 +26,6 @@ from django.views.generic import View
 
 #? get a 'SaveAs'
 #? pk detection more than model._meta.pk, I recall
-#? use pk or not
-#? save ranges too
 #? guess or state for upload
 #? state or offer for download
 #? how about updating too?
@@ -35,7 +34,6 @@ from django.views.generic import View
 #? check charsets
 #? Just a parser for csv and JSON?
 #? data can be more abstract?
-#? Should handle with/without pks
 #? allow args (e.g dialect to CSV dictwriter)
 #? redirect or something on DownloadView
 #? add app name as well as model name to the pk
@@ -109,15 +107,16 @@ class DownloadView(View):
     @param model_in_filename prefix the filename with the model name
     '''
     #! size limit
-    data_type="csv"
-    #data_type="json"
+    #data_type="csv"
+    data_type="json"
     #data_type="cfg"
     #data_type="xml"
     model_class = ChristmasSong
     pk_url_kwarg = 'pk'
+    use_querysets = False
     queryset = None
     queryset_url_page_kwarg = 'page'
-    queryset_page_size = 2
+    queryset_page_size = 4
     selection_id = 'query'
     include_pk = True
     #include_pk = False
@@ -125,20 +124,18 @@ class DownloadView(View):
 
     def model_name(self):
         return self.model_class._meta.model_name
+
+    def model_fields(self):
+        opts = self.model_class._meta
+        # Note: my guess. Should be concrete_fields and private_fields?
+        # Let the Django API decide, see if this works out. R.C.
+        fields = opts.get_fields()
+        if (not self.include_pk):
+            fields.remove(opts.pk)
+        return fields
         
     def model_fieldnames(self):
-        '''
-        Names of usable model fields.
-        This method should reject abstract and foreign fields.
-        It also removes the pk field, if not specified in 'include_pk'.
-        
-        @return model fieldnames to use.
-        '''
-        opts = self.model_class._meta
-        fields = [f.name for f in chain(opts.concrete_fields, opts.private_fields)]
-        if (not self.include_pk):
-            fields.remove(opts.pk.name)
-        return fields
+        return [f.name for f in self.model_fields()]
 
     def get_queryset(self):
         """
@@ -198,7 +195,7 @@ class DownloadView(View):
         return queryset
 
 
-    def obj_to_dict(self, instance, fields=None):
+    def obj_to_dict(self, fields, instance):
         """
         Return a dict containing the data in ``instance``.
         """
@@ -206,11 +203,7 @@ class DownloadView(View):
         pk_name = opts.pk.name
         # maintain some order, even if not critical
         data = collections.OrderedDict()
-        for f in chain(opts.concrete_fields, opts.private_fields):
-            if (fields and (f.name not in fields)):
-                continue
-            if ((f.name == pk_name) and (not self.include_pk)):
-                continue
+        for f in fields:
             data[f.name] = f.value_from_object(instance)
         return data
 
@@ -327,32 +320,23 @@ class DownloadView(View):
         return filename
             
     def get(self, request, *args, **kwargs):
+        fields = self.model_fields()
+        print('::::::::fields:')
+        print(str(fields))
         structdata = self._data_type_map[self.data_type]
-        if (self.pk_url_kwarg):
+        if (not self.use_querysets):
             pk = int(kwargs[self.pk_url_kwarg])
             obj = self.model_class._default_manager.get(pk=pk)
             #print(str(obj))
-            data_dict = self.obj_to_dict(obj)
+            data_dict = self.obj_to_dict(fields, obj)
             #print(str(data_dict))
             data_text = structdata.detailfunc(self, data_dict)
             self.selection_id = str(pk)
         else:
-            #selector = int(kwargs[self.queryset_url_page_kwarg])
-            #selector = request.GET.get(self.queryset_url_page_kwarg, None)
-            #if (not self.queryset):
-                #qs = self.model_class._default_manager.all()
-                #selection_id = 'all'
-            #else:
-                ##qs = self.model_class._default_manager.filter(selector)
-                #selection_id = 'query'
             qs = self.get_queryset()
-
-            #if (not isinstance(selector, dict)):
-                #raise ImproperlyConfigured(
-                #'Queryset selector must be a dict'
-                #)
-            #qs = self.model_class._default_manager.filter(**selector)
-            data_dict = [self.obj_to_dict(obj) for obj in qs]
+            #print('qs:')
+            #print(str(qs))            
+            data_dict = [self.obj_to_dict(fields, obj) for obj in qs]
             data_text = structdata.qsfunc(self, data_dict)
         print('data_text:')
         print(str(data_text))
