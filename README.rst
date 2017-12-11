@@ -85,4 +85,25 @@ Note the use of the explicit 'use_querysets' value to trigger queryset handling.
 
 Queryset handling can be overrdden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
 
+Upload
+~~~~~~~~
+Upload is a simple one-field form.
+
+Upload uses the same 'save' dynamic as Django ORM; if a pk (or, for auto-increment, an 'id' field) is presnt, then the upload updates. If not, the upload appends.
+
+Upload guesses at the form of the file. This can be limited to one form e.g. ::
+
+    data_types = ['csv']
+
+Enable a view. One line in a URL (if not complicated configuration), ::
+
+    url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework)),
+
+There are a couple of other options. Most notably, the form and form construction can limit filesize, ::
+
+    url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework, file_size_limit=1)),
+    
+limits uploads to 1MB.
+
+
 .. _quickviews: https://github.com/rcrowther/quickviews

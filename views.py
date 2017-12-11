@@ -7,19 +7,19 @@ import xml.etree.ElementTree as ET
 import io
 import collections
 import os
-from itertools import chain
-import math
+#from itertools import chain
+#import math
 import copy
 
-import traceback
-from django.shortcuts import render
+#import traceback
+#from django.shortcuts import render
 from django import forms
 from django.core.exceptions import ValidationError
 
 from quickviews import ModelCreateView, CreateView
 
 
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import HttpResponse
 from django.views.generic import View
 
 
@@ -392,7 +392,7 @@ class UploadRecordView(CreateView):
     '''
     model_class = None
     data_types = ['cfg', 'csv', 'json', 'xml']
-    force_insert = True
+    force_insert = False
     file_size_limit = 2
     #success_url = self.return_url()
 
@@ -516,11 +516,7 @@ class UploadRecordView(CreateView):
         'csv' : StructureData(name='csv', detailfunc=csv2python, qsfunc=None, mime='text/csv'),
         'json' : StructureData(name='json', detailfunc=json2python, qsfunc=None, mime='application/json'),
         'xml' : StructureData(name='xml', detailfunc=xml2python, qsfunc=None, mime='text/xml')
-    }    
-    
-    #def fail_action(self, form):
-    #    print('fail')
-    #    print(form)
+    }
 
     def success_action(self, form):
         obj = None
@@ -528,16 +524,16 @@ class UploadRecordView(CreateView):
         data_type = self.get_type(uploadfile)
         structdata = self._data_type_map[data_type]
         data = structdata.detailfunc(self, uploadfile)
-        #print('data')
-        #print(str(data))
+        print('data')
+        print(str(data))
         if isinstance(data, list):
             #?use bulk save?
             for obj_dict in data:
                 obj = self.model_class(**obj_dict)
-                #obj.save(force_insert=self.force_insert)
+                obj.save(force_insert=self.force_insert)
         else:
             obj = self.model_class(**data)
-            #obj.save(force_insert=self.force_insert)
+            obj.save(force_insert=self.force_insert)
         return obj
 
      
