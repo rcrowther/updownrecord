@@ -7,20 +7,14 @@ import xml.etree.ElementTree as ET
 import io
 import collections
 import os
-#from itertools import chain
-#import math
 import copy
 
-#import traceback
-#from django.shortcuts import render
 from django import forms
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ImproperlyConfigured
+from django.http import HttpResponse, Http404
+from django.views.generic import View
 
 from quickviews import ModelCreateView, CreateView
-
-
-from django.http import HttpResponse
-from django.views.generic import View
 
 
 '''
@@ -392,10 +386,20 @@ class UploadRecordView(CreateView):
     '''
     model_class = None
     data_types = ['cfg', 'csv', 'json', 'xml']
+    default = None
     force_insert = False
     file_size_limit = 2
     #success_url = self.return_url()
-
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if (self.default and (not (self.default in self.data_types))):
+            raise ImproperlyConfigured('{} default not found in data types. default:"{}", valid data types:{}'.format(
+                self.__class__.__name__,
+                self.default,
+                ', '.join(self.data_types),
+                ))
+        
     def get_form(self, form_class=None):
         form_class = get_upload_form(self.file_size_limit)
         return super().get_form(form_class)
@@ -408,10 +412,18 @@ class UploadRecordView(CreateView):
         if (not tpe):
             # failed on mime, try extension
             base = os.path.basename(uploadfile.name)
-            extension = base.rsplit('.', 1)[1]
+            extension = None
+            try:
+                extension = base.rsplit('.', 1)[1]
+            except IndexError:
+                if (self.default):
+                    extension = self.default
+                else:
+                    raise Http404("Failed to identify uploaded file from mime and no extension or default. mime:'{0}' extension:'{1}'".format(mime, extension))
+                
             tpe = _extension_map.get(extension)
             if (not tpe):
-                raise Http404("Failed to identify uploaded file from mime or extension mime:'{0}' extension:'{1}'".format(mime, extension))
+                raise Http404("Failed to identify uploaded file from mime or extension. mime:'{0}' extension:'{1}'".format(mime, extension))
         if (not(tpe in self.data_types)):
              raise Http404('File type not accepted.')
         return tpe

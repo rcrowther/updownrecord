@@ -85,6 +85,8 @@ Note the use of the explicit 'use_querysets' value to trigger queryset handling.
 
 Queryset handling can be overrdden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
 
+
+
 Upload
 ~~~~~~~~
 Upload is a simple one-field form.
@@ -101,9 +103,17 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
 There are a couple of other options. Most notably, the form and form construction can limit filesize, ::
 
-    url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework, file_size_limit=1)),
+    from updownrecord import UploadRecordView
+    ...    
+    urlpatterns = [
+        url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, file_size_limit=1)),
+    ]
     
 limits uploads to 1MB.
+
+'default' can set a type if mime/extension detection fails, ::
+
+    url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, default='json')),
 
 
 .. _quickviews: https://github.com/rcrowther/quickviews
