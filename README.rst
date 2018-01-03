@@ -106,7 +106,7 @@ Upload
 ~~~~~~~~
 Upload is a simple one-field form.
 
-Upload uses the same 'save' dynamic as Django ORM; if a pk (or, for auto-increment, an 'id' field) is presnt, then the upload updates. If not, the upload appends.
+Upload uses the same 'save' dynamic as Django ORM; if a pk (or, for auto-increment, an 'id' field) is present, then the upload updates. If not, the upload appends.
 
 Upload guesses at the form of the file. This can be limited to one form e.g. ::
 
@@ -126,9 +126,18 @@ There are a couple of other options. Most notably, the form and form constructio
     
 limits uploads to 1MB.
 
-'default' can set a type if mime/extension detection fails, ::
+Other options
++++++++++++++
 
-    url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, default='json')),
+default
+    can set a type if mime/extension detection fails, ::
+
+        url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, default='json')),
+
+key_map
+    dictionary to map modelkeys -> input keys. So if an input record calls a field 'description', and the Model calls the field 'desc', join the values like this, ::
+        
+        url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
 
 
 .. _quickviews: https://github.com/rcrowther/quickviews
