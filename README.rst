@@ -116,26 +116,28 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
     url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework)),
 
-There are a couple of other options. Most notably, the form and form construction can limit filesize, ::
-
-    from updownrecord import UploadRecordView
-    ...    
-    urlpatterns = [
-        url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, file_size_limit=1)),
-    ]
-    
-limits uploads to 1MB.
 
 Other options
 +++++++++++++
 
+file_size_limit
+    limit filesize (in MB), ::
+
+        from updownrecord import UploadRecordView
+        ...    
+        urlpatterns = [
+            url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, file_size_limit=1)),
+        ]
+        
+    limits uploads to 1MB.
+
 default
-    can set a type if mime/extension detection fails, ::
+    Set a type if mime/extension detection fails, ::
 
         url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, default='json')),
 
 key_map
-    dictionary to map modelkeys -> input keys. So if an input record calls a field 'description', and the Model calls the field 'desc', join the values like this, ::
+    A dict to map Model keys -> input keys. So if an input record names a field 'description', and the Model names the field 'desc', join the values (you can also drop input fields by not declaring them), ::
         
         url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
 
