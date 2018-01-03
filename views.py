@@ -112,6 +112,8 @@ class DownloadRecordView(View):
     'model_in_filename=True'.
     
     @param pk_url_kwarg name of argument for pks
+    @param use_querysets override the pk_url_kwarg for query handling.
+    @param include_pk if False will remove the pk field from downloads.
     @param model_in_filename prefix the filename with the model name
     '''
     #! size limit
@@ -127,6 +129,7 @@ class DownloadRecordView(View):
     queryset_page_size = 25
     selection_id = 'query'
     include_pk = True
+    key_map = {}
     model_in_filename = False
 
     def model_name(self):
@@ -212,6 +215,8 @@ class DownloadRecordView(View):
         data = collections.OrderedDict()
         for f in fields:
             data[f.name] = f.value_from_object(instance)
+        if (self.key_map):
+            data = collections.OrderedDict((self.key_map[k], v) for k, v in data.items() if k in self.key_map)
         return data
 
     def _dict2csv_obj(self, writer, data_dict):
@@ -266,7 +271,19 @@ class DownloadRecordView(View):
             b.append('[{}]\n'.format(idx))
             self._dict2cfg_obj(b, detail_dict)
         return ''.join(b)
-            
+
+    def dict2freecfg_detail(self, detail_dict):
+        b = []
+        self._dict2cfg_obj(b, detail_dict)
+        return ''.join(b)
+        
+    def dict2freecfg_queryset(self, queryset_array):
+        b = []
+        for idx, detail_dict in enumerate(queryset_array):
+            b.append('[{}]\n'.format(idx))
+            self._dict2cfg_obj(b, detail_dict)
+        return ''.join(b)
+                    
     def _dict2xml_obj(self, b, data_dict):
         b.append('<{}>\n'.format(self.model_name()))
         for k, v in data_dict.items():
@@ -289,6 +306,18 @@ class DownloadRecordView(View):
         return ''.join(b)
 
     _data_type_map = {
+        'cfg' : StructureData(
+            name='cfg', 
+            detailfunc=dict2cfg_detail, 
+            qsfunc=dict2cfg_queryset,
+            mime='text/plain'
+        ),
+        'freecfg' : StructureData(
+            name='freecfg', 
+            detailfunc=dict2freecfg_detail, 
+            qsfunc=dict2freecfg_queryset,
+            mime='text/plain'
+        ),
         'csv' : StructureData(
             name='csv', 
             detailfunc=dict2csv_detail, 
@@ -301,12 +330,7 @@ class DownloadRecordView(View):
             qsfunc=dict2json_queryset, 
             mime='application/json'
         ),
-        'cfg' : StructureData(
-            name='cfg', 
-            detailfunc=dict2cfg_detail, 
-            qsfunc=dict2cfg_queryset,
-            mime='text/plain'
-        ),
+
         'xml' : StructureData(
             name='xml', 
             detailfunc=dict2xml_detail, 

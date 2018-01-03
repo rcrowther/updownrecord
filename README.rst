@@ -48,7 +48,7 @@ About data structuring
 ----------------------
 The code contains extensive notes. In short, each download is resolved into a structure something like, for an object, object-as-dict; and for a queryset, list(object-as-dict()).
 
-Uploads are treated in a similar way. This will not work for all data. For example, it is unusual to use 'ini' type files for consecutive record storage (this app enables that). Or, the SaveRecordView can not handle Microsoft Excel CSV output. However, all the handled formats are taxt-based, so they should be easy to edit into a form where they will upload.
+Uploads are treated in a similar way. This will not work for all data. For example, it is unusual to use 'ini' type files for consecutive record storage (this app enables that). Or, the SaveRecordView can not handle Microsoft Excel CSV output. However, all the handled formats are text-based, so should be easy to edit into a form where they will upload.
 
 
 Install
@@ -84,13 +84,18 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
     from updownrecord import views
 
-    url(r'^download/(?P<pk>[0-9]+)$', views.DownloadView.as_view(model=Firework, data_type="csv")),
+    url(r'^(?P<pk>[0-9]+)/download/$', views.DownloadView.as_view(model=Firework, data_type="csv")),
 
 (that line uses the default url parameter name of 'pk') Now download object pk=9 as CSV, ::
 
-    http://127.0.0.1:8000/firework/download/9
+    http://127.0.0.1:8000/firework/9/download
 
-There are a surprising number of options on DownloadView (it has an API with some similarity to Django's ListView). It can be set to download 'page' ranges, ::
+There are a surprising number of options on DownloadView (it has an API with some similarity to Django's ListView). 
+
+
+Downloading object ranges
++++++++++++++++++++++++++
+DownloadView can be set to download 'page' ranges, ::
 
     url(r'^download/$', views.DownloadView.as_view(use_querysets=True, data_type="json")),
 
@@ -101,12 +106,40 @@ Note the use of the explicit 'use_querysets' value to trigger queryset handling.
 Queryset handling can be overridden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
 
 
+Options
++++++++
+model_class
+    State the model. Required.
+
+pk_url_kwarg
+    A URL argument to be found in a calling URL.
+
+use_querysets
+    Override self.pk_url_kwarg to return a set of data. At which point, the download class checks if there is a preset self.queryset. If not it looks for self.queryset_url_page_kwarg in the URL, if found it takes that as a paging argument based on self.queryset_page_size and otherwise fails. You can also override the dynamic queryset behaviour by overriding get_queryset().
+    
+include_pk
+    if False will strip the pk field from downloads.
+    
+data_type
+    (default='JSON') The type to download, can be any of the types listed in the formats.
+    
+key_map
+    A dict to map Model keys -> input keys. So if an input record names a field 'description', and the Model names the field 'desc', join the values (you can also drop input fields by not declaring them), ::
+        
+        url(r'^upload/$', DownloadloadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
+
+    The same key map can be used as in UploadRecordView, see below.
+
+model_in_filename
+    Adds the model name to the offered download filename.
+
+
 
 Upload
 ~~~~~~~~
 Upload is a simple one-field form.
 
-Upload uses the same 'save' dynamic as Django ORM; if a pk (or, for auto-increment, an 'id' field) is present, then the upload updates. If not, the upload appends.
+Upload uses the same 'save' dynamic as the Django ORM; if a pk (or, for auto-increment, an 'id' field) is present, then the upload updates. If not, the upload appends.
 
 Upload guesses at the form of the file. This can be limited to one form e.g. ::
 
@@ -155,21 +188,25 @@ key_map
         
         url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
 
+    The same key map can be used as in DownloadRecordView, see above.
+
+
 popnone_normalize
     Normalise by removing (popping) any field value that tests as boolean False, such as empty strings (default=True).
     
     This is an elegant solution to normalizing much input data, because an unstated field then takes defaults from the Django model. The places popnone_normalize may fail are when the field has no default (for some good reason?), when a field value is None for a defined purpose, etc. However, these seem to be corner cases. For example, popnone_normalize handles creation dates quite well (by removing any need to state a date, or concern about format, the Model falls back to a default). That is why the default is True.
-
+    
     
 data workflow
 ++++++++++++++
 For reference,
+
 - Parse the input
 - Convert the parsed key/values to a dict
 - If key_map exists, map keys of dict to Model field names
 - If popnone_normalize=True, remove 'empty' values
-- Run normalize() for any extra tweaks
-
+- Run normalize() for extra tweaks
+- Convert dict to model, then save()
 
  
 .. _quickviews: https://github.com/rcrowther/quickviews
