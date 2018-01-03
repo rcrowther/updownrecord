@@ -20,7 +20,7 @@ Limitations
 -----------
 Self-contained records only (foreign keys are unsupported) 
 
-Only handles CSV, CFG (microsoft '.ini'), JSON, and XML (that's a limitation? Someone will probably think so).
+Only handles CSV, CFG (microsoft '.ini'), FREECFG (see below), JSON, and XML (that's a limitation? Someone will probably think so).
 
 Text encoding must be UTF-8
 
@@ -41,7 +41,7 @@ Status
 ------
 This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, and a constantly changing API.
 
-Do not rely on the API. Fortunately, the app is a leaf node, ending with users. No need to worry about dependancies.
+Do not rely on the API. Fortunately, the app is a leaf node, ending with users. No worry about dependancies.
 
 
 About data structuring
@@ -63,6 +63,21 @@ In settings.py, ::
 
 Usage
 -----
+Data forms
+~~~~~~~~~~
+CSV, CFG (microsoft '.ini'), JSON, and XML are well-known formats. The file views.py contains extensive notes on how the app handles them, especially for upload. Briefly, all are treated as a dictionary of key->value pairs, and must be in that 
+format.
+
+A couple of notes:
+
+CSV
+    Operates with or without a header line
+    
+FREECFG
+    FREECFG is a home-made format which works round some limitations of the CFG format/Python parser. It has no capacity for escapes or section headers, and whitespace is stripped from all keys and values.
+
+    FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9_]'. However, it has advantages: FREECFG requires no section headers at all. And it can handle any length of value, including paragraphs (only the start and end of values are stripped). It is also efficient.
+
 Download
 ~~~~~~~~
 Enable a view. One line in a URL (if not complicated configuration), ::

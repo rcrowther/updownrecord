@@ -41,10 +41,23 @@ CFG (Windows 'ini') can only represent group labels and key->values
 This app assumes that the CFG file itself represents an array, and that
 each group contained is an object.
 
+CFG input must have at least one section header at the top pf the file
+but see FREECFG below.
+
 CFG will not allow group names to be repeated, so they are indexed
 (pks are in the data lines). 
  
 PKs are data lines, not group labels. See the similar argument for XML.
+
+== FREECFG
+FREECFG is a home-made format which works round some limitations of the 
+CFG format/Python parser. It has no capacity for escapes or section 
+headers, and whitespace is stripped from all keys and values.
+
+FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9_]'
+However, it has advantages: FREECFG requires no section headers at all.
+And it can handle any length of value, including paragraphs (only
+the start and end of values are stripped). It is also efficient.
 
 == CSV
 CSV is the only storage type which does not by default implement key to 
@@ -368,11 +381,14 @@ _extension_map = {
     'csv' : 'csv',
     'json' : 'json',
     'cfg': 'cfg',
+    'freecfg': 'freecfg',
     'ini': 'cfg',
     'xml': 'xml'
 }
 
 
+import re
+from configparser import ParsingError
 
 class UploadRecordView(CreateView):
     '''
@@ -383,12 +399,17 @@ class UploadRecordView(CreateView):
 
     @param data_types limit the dta types (beyond the ability to process)
     @param file_size_limit in MB (e.g. value = 2 is 2MB)
+    @param default for form of input file. Tried if MIME and and extension fail.
+    @param key_map a dict to map object field names -> keys from an
+    uploaded file. Can be used to remove keys (don't list them).  
     '''
     model_class = None
-    data_types = ['cfg', 'csv', 'json', 'xml']
+    data_types = ['cfg', 'freecfg', 'csv', 'json', 'xml']
+    # for data type
     default = None
     force_insert = False
     file_size_limit = 2
+    key_map = {}
     #success_url = self.return_url()
     
     def __init__(self, **kwargs):
@@ -399,6 +420,16 @@ class UploadRecordView(CreateView):
                 self.default,
                 ', '.join(self.data_types),
                 ))
+             
+        if (self.key_map):
+            fieldnames = [f.name for f in self.model_class._meta.fields]
+            for k in self.key_map.keys():
+                if k not in fieldnames:
+                    raise ImproperlyConfigured('{} key_map attribute states db key not declared as model field name. key:"{}", model:{}'.format(
+                        self.__class__.__name__,
+                        k,
+                        self.model_class._meta.object_name
+                        ))                
         
     def get_form(self, form_class=None):
         form_class = get_upload_form(self.file_size_limit)
@@ -453,7 +484,42 @@ class UploadRecordView(CreateView):
             return l 
         else:
             return self._cfg2dict(parser, sections[0])
-
+            
+    def freecfg2python(self, uploadfile):
+        b = {}
+        key = ''
+        holding = []
+        startRE = re.compile('^(\w+)\s?=\s*(.*)$')
+        commentRE = re.compile('^\s*#')
+        it = self.binaryToUTF8Iter(uploadfile)
+        # parse
+        for line in it:
+            if (line):
+                mo = commentRE.match(line)
+                if (not mo):
+                    mo = startRE.match(line)
+                    if (mo):
+                        key = mo.group(1)
+                        holding = [mo.group(2)]
+                        break   
+                    else:
+                        raise ParsingError('first significant line must contain a key')
+        for line in it:
+            mo = commentRE.match(line)
+            if (mo):
+                continue
+            mo = startRE.match(line)
+            if (mo):
+                value = ''.join(holding)
+                b[key] = value.strip()  
+                key = mo.group(1)
+                holding = [mo.group(2)]
+            else:
+                holding.append(line)
+        b[key] = ''.join(holding)
+        return b
+          
+              
     def csv2python(self, uploadfile):
         # if CSV has headers, this reads ok
         reader = csv.DictReader(self.binaryToUTF8Iter(uploadfile))
@@ -525,27 +591,32 @@ class UploadRecordView(CreateView):
 
     _data_type_map = {
         'cfg' : StructureData(name='cfg', detailfunc=cfg2python, qsfunc=None, mime='text/plain'),
+        'freecfg' : StructureData(name='freecfg', detailfunc=freecfg2python, qsfunc=None, mime='text/plain'),
         'csv' : StructureData(name='csv', detailfunc=csv2python, qsfunc=None, mime='text/csv'),
         'json' : StructureData(name='json', detailfunc=json2python, qsfunc=None, mime='application/json'),
         'xml' : StructureData(name='xml', detailfunc=xml2python, qsfunc=None, mime='text/xml')
     }
 
+    def save_action(self, data):
+        if (self.key_map):
+            data = {k:data[v] for k, v in self.key_map.items() if v in data}
+        obj = self.model_class(**data)
+        obj.save(force_insert=self.force_insert)
+                  
     def success_action(self, form):
         obj = None
         uploadfile = self.request.FILES['data']
         data_type = self.get_type(uploadfile)
         structdata = self._data_type_map[data_type]
         data = structdata.detailfunc(self, uploadfile)
-        print('data')
-        print(str(data))
         if isinstance(data, list):
             #?use bulk save?
             for obj_dict in data:
-                obj = self.model_class(**obj_dict)
-                obj.save(force_insert=self.force_insert)
+                self.save_action(data)
         else:
-            obj = self.model_class(**data)
-            obj.save(force_insert=self.force_insert)
+            #print('data')
+            #print(str(data))
+            self.save_action(data)
         return obj
 
      
