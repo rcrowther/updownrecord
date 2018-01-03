@@ -121,7 +121,7 @@ include_pk
     if False will strip the pk field from downloads.
     
 data_type
-    (default='JSON') The type to download, can be any of the types listed in the formats.
+    (default='JSON') Format data to this type, can be any of the types listed in the formats.
     
 key_map
     A dict to map Model keys -> input keys. So if an input record names a field 'description', and the Model names the field 'desc', join the values (you can also drop input fields by not declaring them), ::

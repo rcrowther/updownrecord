@@ -87,6 +87,15 @@ https://stackoverflow.com/questions/152313/xml-attributes-vs-elements
 StructureData = collections.namedtuple('StructureData', ['name', 'detailfunc', 'qsfunc', 'mime'])
 
 
+def _validate_keymap(class_name, model_class, key_map):
+    fieldnames = [f.name for f in model_class._meta.fields]
+    for k in key_map.keys():
+        if k not in fieldnames:
+            raise ImproperlyConfigured('{} key_map attribute states db key not declared as model field name. key:"{}", model:{}'.format(
+                class_name,
+                k,
+                model_class._meta.object_name
+                ))
 
 class DownloadRecordView(View):
     '''
@@ -132,6 +141,19 @@ class DownloadRecordView(View):
     key_map = {}
     model_in_filename = False
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if (not (self.data_type in self._data_type_map)):
+            raise ImproperlyConfigured('{} data_type not found in data types. data_type:"{}", valid data types:{}'.format(
+                self.__class__.__name__,
+                self.data_type,
+                ', '.join(self._data_type_map.keys()),
+                ))
+             
+        if (self.key_map):
+            _validate_keymap(self.__class__.__name__, self.model_class, self.key_map)
+
+                        
     def model_name(self):
         return self.model_class._meta.model_name
 
@@ -447,14 +469,8 @@ class UploadRecordView(CreateView):
                 ))
              
         if (self.key_map):
-            fieldnames = [f.name for f in self.model_class._meta.fields]
-            for k in self.key_map.keys():
-                if k not in fieldnames:
-                    raise ImproperlyConfigured('{} key_map attribute states db key not declared as model field name. key:"{}", model:{}'.format(
-                        self.__class__.__name__,
-                        k,
-                        self.model_class._meta.object_name
-                        ))                
+            _validate_keymap(self.__class__.__name__, self.model_class, self.key_map)
+               
         
     def get_form(self, form_class=None):
         form_class = get_upload_form(self.file_size_limit)

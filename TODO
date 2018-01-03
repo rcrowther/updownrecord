@@ -1,5 +1,4 @@
-#? Freecfg for download
-#? map download
+#? Freecfg handle sections
 #? get a 'SaveAs'
 #? pk detection more than model._meta.pk, I recall
 #? guess or state for upload
@@ -11,3 +10,4 @@
 #? redirect or something on DownloadView
 #? add app name as well as model name to the pk
 #? format page filename
+#? bulk saving
