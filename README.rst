@@ -76,7 +76,7 @@ CSV
 FREECFG
     FREECFG is a home-made format which works round some limitations of the CFG format/Python parser. It has no capacity for escapes or section headers, and whitespace is stripped from all keys and values.
 
-    FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9_]'. However, it has advantages: FREECFG requires no section headers at all. And it can handle any length of value, including paragraphs (only the start and end of values are stripped). It is also efficient.
+    FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9\_]'. However, it has advantages: FREECFG requires no section headers at all. It can handle any length of value, including paragraphs (only the start and end of values are stripped). It is also efficient.
 
 Download
 ~~~~~~~~
@@ -98,7 +98,7 @@ Note the use of the explicit 'use_querysets' value to trigger queryset handling.
  
     http://127.0.0.1:8000/updownrecord/download?page=2 
 
-Queryset handling can be overrdden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
+Queryset handling can be overridden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
 
 
 
@@ -116,6 +116,20 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
     url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework)),
 
+Normalise
++++++++++
+Sometimes input data needs to be manipulated. For example, manipulation is often needed when input data can be blank but a Model field disallows blank. 
+
+Please note that this step is not validation (or should not be). All Django's Model and Form validation is still in place, and will be used when necessary. Normalisation is only for bridging the gap between the form of input data, and the configuration of a Model.
+
+For fine detail handling, override the normalize() method. For a nice solution, try removing the data entirely (rather than setting with a new value). This will ask a new save to use values from the Model, ::
+
+    def normalize(self, data):
+        if (not data['created']):
+            del(data['created'])
+        return data
+
+However, that simple example duplicates existing action. See below for popnone_normalize, which is True by default. Mostly, only override normalize() if you need very fine-grained control over data input, and popnone_normalize=False. 
 
 Other options
 +++++++++++++
@@ -141,5 +155,21 @@ key_map
         
         url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
 
+popnone_normalize
+    Normalise by removing (popping) any field value that tests as boolean False, such as empty strings (default=True).
+    
+    This is an elegant solution to normalizing much input data, because an unstated field then takes defaults from the Django model. The places popnone_normalize may fail are when the field has no default (for some good reason?), when a field value is None for a defined purpose, etc. However, these seem to be corner cases. For example, popnone_normalize handles creation dates quite well (by removing any need to state a date, or concern about format, the Model falls back to a default). That is why the default is True.
 
+    
+data workflow
+++++++++++++++
+For reference,
+- Parse the input
+- Convert the parsed key/values to a dict
+- If key_map exists, map keys of dict to Model field names
+- If popnone_normalize=True, remove 'empty' values
+- Run normalize() for any extra tweaks
+
+
+ 
 .. _quickviews: https://github.com/rcrowther/quickviews

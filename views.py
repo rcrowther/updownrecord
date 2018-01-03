@@ -410,6 +410,7 @@ class UploadRecordView(CreateView):
     force_insert = False
     file_size_limit = 2
     key_map = {}
+    popnone_normalize = True
     #success_url = self.return_url()
     
     def __init__(self, **kwargs):
@@ -597,9 +598,15 @@ class UploadRecordView(CreateView):
         'xml' : StructureData(name='xml', detailfunc=xml2python, qsfunc=None, mime='text/xml')
     }
 
+    def normalize(self, data):
+        return data
+        
     def save_action(self, data):
         if (self.key_map):
             data = {k:data[v] for k, v in self.key_map.items() if v in data}
+        if (self.popnone_normalize):
+            data = {k:v for k, v in data.items() if v}
+        data = self.normalize(data)
         obj = self.model_class(**data)
         obj.save(force_insert=self.force_insert)
                   
