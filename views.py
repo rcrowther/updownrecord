@@ -1,6 +1,8 @@
 import csv
 import json
 import configparser
+from updownrecord import freecfg
+
 from xml.etree.ElementTree import XMLParser
 import xml.etree.ElementTree as ET
 
@@ -295,17 +297,23 @@ class DownloadRecordView(View):
         return ''.join(b)
 
     def dict2freecfg_detail(self, detail_dict):
-        b = []
-        self._dict2cfg_obj(b, detail_dict)
-        return ''.join(b)
-        
+        b = freecfg.Builder()
+        b.mkentries(detail_dict)
+        return b.result()
+                
     def dict2freecfg_queryset(self, queryset_array):
-        b = []
+        #b = []
+        #for idx, detail_dict in enumerate(queryset_array):
+            #b.append('[{}]\n'.format(idx))
+            #self._dict2cfg_obj(b, detail_dict)
+        #return ''.join(b)
+        b = freecfg.Builder()
         for idx, detail_dict in enumerate(queryset_array):
-            b.append('[{}]\n'.format(idx))
-            self._dict2cfg_obj(b, detail_dict)
-        return ''.join(b)
-                    
+            b.mksection(str(idx))
+            b.mkentries(detail_dict)
+        return b.result()
+
+        
     def _dict2xml_obj(self, b, data_dict):
         b.append('<{}>\n'.format(self.model_name()))
         for k, v in data_dict.items():
@@ -527,40 +535,46 @@ class UploadRecordView(CreateView):
             return self._cfg2dict(parser, sections[0])
             
     def freecfg2python(self, uploadfile):
-        b = {}
-        key = ''
-        holding = []
-        startRE = re.compile('^(\w+)\s?=\s*(.*)$')
-        commentRE = re.compile('^\s*#')
-        it = self.binaryToUTF8Iter(uploadfile)
-        # parse
-        for line in it:
-            if (line):
-                mo = commentRE.match(line)
-                if (not mo):
-                    mo = startRE.match(line)
-                    if (mo):
-                        key = mo.group(1)
-                        holding = [mo.group(2)]
-                        break   
-                    else:
-                        raise ParsingError('first significant line must contain a key')
-        for line in it:
-            mo = commentRE.match(line)
-            if (mo):
-                continue
-            mo = startRE.match(line)
-            if (mo):
-                value = ''.join(holding)
-                b[key] = value.strip()  
-                key = mo.group(1)
-                holding = [mo.group(2)]
-            else:
-                holding.append(line)
-        b[key] = ''.join(holding)
-        return b
-          
-              
+        #b = {}
+        #key = ''
+        #holding = []
+        #startRE = re.compile('^(\w+)\s?=\s*(.*)$')
+        #commentRE = re.compile('^\s*#')
+        #it = self.binaryToUTF8Iter(uploadfile)
+        ## parse
+        #for line in it:
+            #if (line):
+                #mo = commentRE.match(line)
+                #if (not mo):
+                    #mo = startRE.match(line)
+                    #if (mo):
+                        #key = mo.group(1)
+                        #holding = [mo.group(2)]
+                        #break   
+                    #else:
+                        #raise ParsingError('first significant line must contain a key')
+        #for line in it:
+            #mo = commentRE.match(line)
+            #if (mo):
+                #continue
+            #mo = startRE.match(line)
+            #if (mo):
+                #value = ''.join(holding)
+                #b[key] = value.strip()  
+                #key = mo.group(1)
+                #holding = [mo.group(2)]
+            #else:
+                #holding.append(line)
+        #b[key] = ''.join(holding)
+        #return b
+        p = freecfg.Parser(seq_is_dict=False)
+        pdata = p.parse_binary_iter(uploadfile)
+        # if only one, strip the object_dict out of the list
+        if (len(pdata) > 1):
+            return pdata
+        else:
+            return pdata[0]
+                          
     def csv2python(self, uploadfile):
         # if CSV has headers, this reads ok
         reader = csv.DictReader(self.binaryToUTF8Iter(uploadfile))
@@ -658,8 +672,10 @@ class UploadRecordView(CreateView):
         data = structdata.detailfunc(self, uploadfile)
         if isinstance(data, list):
             #?use bulk save?
+            #print('data')
+            #print(str(data))
             for obj_dict in data:
-                self.save_action(data)
+                self.save_action(obj_dict)
         else:
             #print('data')
             #print(str(data))

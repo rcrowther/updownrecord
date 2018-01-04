@@ -11,3 +11,4 @@
 #? add app name as well as model name to the pk
 #? format page filename
 #? bulk saving
+#? downloading stringified language classes

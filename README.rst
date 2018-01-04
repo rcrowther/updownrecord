@@ -7,7 +7,7 @@ When to use this application
 ----------------------------
 This is weird idea. I may forget it. I hope, when I need it, I don't.
 
-The app assumes the user is able to understand the idea of a model. Not that they are somewhat dumb or impatient and can only handle a text form. The idea assumes the user could (in most usage scenarios) organise model data for themselves.
+The app assumes the user is able to understand the idea of a model. Not that they are incapable or impatient and can only handle a text form. The idea assumes the user could (in most usage scenarios) organise model data for themselves.
 
 In return the user gets silly-easy and efficient data upload/download. Bear in mind, this is not the usual file-upload scenario. The user has supplied text-based structured data. The data is moved as one, no mess with field-fractured web forms.  
 
@@ -74,9 +74,9 @@ CSV
     Operates with or without a header line
     
 FREECFG
-    FREECFG is a home-made format which works round some limitations of the CFG format/Python parser. It has no capacity for escapes or section headers, and whitespace is stripped from all keys and values.
-
-    FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9\_]'. However, it has advantages: FREECFG requires no section headers at all. It can handle any length of value, including paragraphs (only the start and end of values are stripped). It is also efficient.
+    FREECFG is a home-made format which works round some limitations of the CFG format/Python parser. The parser has no capacity for escapes, and whitespace is stripped from all keys and values. FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9\_]+'. 
+    
+    FREECFG has advantages. Section headers can be any string. The parser can run with no section headers. Comments are inital hash/pound, and valid anywhere. Values can be any length, including paragraphs (only the start and end of values are stripped).
 
 Download
 ~~~~~~~~
@@ -90,7 +90,7 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
     http://127.0.0.1:8000/firework/9/download
 
-There are a surprising number of options on DownloadView (it has an API with some similarity to Django's ListView). 
+There are a surprising number of options on DownloadView (it has an API similar to Django's ListView). 
 
 
 Downloading object ranges
@@ -162,7 +162,7 @@ For fine detail handling, override the normalize() method. For a nice solution, 
             del(data['created'])
         return data
 
-However, that simple example duplicates existing action. See below for popnone_normalize, which is True by default. Mostly, only override normalize() if you need very fine-grained control over data input, and popnone_normalize=False. 
+However, that example duplicates an existing action. See below for popnone_normalize, which is True by default. Mostly, only override normalize() if you need very fine-grained control over data input, so popnone_normalize=False. 
 
 Other options
 +++++++++++++
@@ -194,7 +194,7 @@ key_map
 popnone_normalize
     Normalise by removing (popping) any field value that tests as boolean False, such as empty strings (default=True).
     
-    This is an elegant solution to normalizing much input data, because an unstated field then takes defaults from the Django model. The places popnone_normalize may fail are when the field has no default (for some good reason?), when a field value is None for a defined purpose, etc. However, these seem to be corner cases. For example, popnone_normalize handles creation dates quite well (by removing any need to state a date, or concern about format, the Model falls back to a default). That is why the default is True.
+    This is an elegant solution to normalizing much input data, because an unstated field takes defaults from the Django model. The places popnone_normalize may fail are when the field has no default (for some good reason?), when a field value is None for a defined purpose, etc. However, these seem to be corner cases. For example, popnone_normalize handles creation dates quite well (by removing any need to state a date, or concern about format, the Model falls back to a default). That is why the default for this option is True.
     
     
 data workflow
