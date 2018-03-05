@@ -1,7 +1,9 @@
 import csv
 import json
 import configparser
-from updownrecord import freecfg
+#from updownrecord import freecfg
+#import freecfg
+from .serializers.freecfg import *
 
 from xml.etree.ElementTree import XMLParser
 import xml.etree.ElementTree as ET
@@ -17,6 +19,8 @@ from django.http import HttpResponse, Http404
 from django.views.generic import View
 
 from quickviews import ModelCreateView, CreateView
+
+from .xml_serializer import *
 
 
 '''
@@ -535,38 +539,6 @@ class UploadRecordView(CreateView):
             return self._cfg2dict(parser, sections[0])
             
     def freecfg2python(self, uploadfile):
-        #b = {}
-        #key = ''
-        #holding = []
-        #startRE = re.compile('^(\w+)\s?=\s*(.*)$')
-        #commentRE = re.compile('^\s*#')
-        #it = self.binaryToUTF8Iter(uploadfile)
-        ## parse
-        #for line in it:
-            #if (line):
-                #mo = commentRE.match(line)
-                #if (not mo):
-                    #mo = startRE.match(line)
-                    #if (mo):
-                        #key = mo.group(1)
-                        #holding = [mo.group(2)]
-                        #break   
-                    #else:
-                        #raise ParsingError('first significant line must contain a key')
-        #for line in it:
-            #mo = commentRE.match(line)
-            #if (mo):
-                #continue
-            #mo = startRE.match(line)
-            #if (mo):
-                #value = ''.join(holding)
-                #b[key] = value.strip()  
-                #key = mo.group(1)
-                #holding = [mo.group(2)]
-            #else:
-                #holding.append(line)
-        #b[key] = ''.join(holding)
-        #return b
         p = freecfg.Parser(seq_is_dict=False)
         pdata = p.parse_binary_iter(uploadfile)
         # if only one, strip the object_dict out of the list
@@ -656,6 +628,9 @@ class UploadRecordView(CreateView):
         return data
         
     def save_action(self, data):
+        '''
+        Map, normalise then save a dict object representation.
+        '''
         if (self.key_map):
             data = {k:data[v] for k, v in self.key_map.items() if v in data}
         if (self.popnone_normalize):
@@ -663,7 +638,8 @@ class UploadRecordView(CreateView):
         data = self.normalize(data)
         obj = self.model_class(**data)
         obj.save(force_insert=self.force_insert)
-                  
+        return obj
+        
     def success_action(self, form):
         obj = None
         uploadfile = self.request.FILES['data']
@@ -679,7 +655,7 @@ class UploadRecordView(CreateView):
         else:
             #print('data')
             #print(str(data))
-            self.save_action(data)
+            obj = self.save_action(data)
         return obj
 
      

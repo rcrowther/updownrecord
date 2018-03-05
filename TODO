@@ -1,4 +1,3 @@
-#? Freecfg handle sections
 #? get a 'SaveAs'
 #? pk detection more than model._meta.pk, I recall
 #? guess or state for upload
@@ -12,3 +11,19 @@
 #? format page filename
 #? bulk saving
 #? downloading stringified language classes
+
+Need a rethink here:
+
+Handle relational fields if possible, otherwise 
+Serialize - error
+Deserialize - maybe ignore
+(Means overriding base to throw error on natural key stuff too)
+
+CSV and FreeCFG can not use Python (it does the fields thing)?
+Deserialize will not work for dicts, uses objects?
+ignorenonexistent is Python Deserialize attribute
+
+ignorenonexistent on everthing
+
+need new base for protection against non-relative fields
+therefor need new Python for non-relative fields. 

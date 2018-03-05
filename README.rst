@@ -20,7 +20,7 @@ Limitations
 -----------
 Self-contained records only (foreign keys are unsupported) 
 
-Only handles CSV, CFG (microsoft '.ini'), FREECFG (see below), JSON, and XML (that's a limitation? Someone will probably think so).
+Only handles CSV, FREECFG (see below), JSON, and XML (that's a limitation? Someone will probably think so).
 
 Text encoding must be UTF-8
 
