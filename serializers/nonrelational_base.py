@@ -66,7 +66,7 @@ class NonrelationalSerializer(base.Serializer):
         # the super() line from a Django I have downloaded. R.C.
         stream = stream if stream is not None else self.stream_class()
         return super().serialize(queryset, *args, stream=stream, fields=fields, use_natural_foreign_keys=False,
-                  use_natural_primary_keys=use_natural_primary_keys, progress_output=progress_output, object_count=object_count, options=options)
+                  use_natural_primary_keys=use_natural_primary_keys, progress_output=progress_output, object_count=object_count, **options)
         
     def handle_fk_field(self, obj, field):
         """
