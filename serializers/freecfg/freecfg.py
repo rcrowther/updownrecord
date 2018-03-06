@@ -224,10 +224,6 @@ class Reader():
     
     Keys must adhere to regex '\w+' i.e '[^a-zA-Z0-9\_]'. Values can be
     any length, including paragraphs.
-    
-    @param seq_is_dict If True, returns a dict of dicts with section 
-    header text as keys. If False, the return is a list of dicts.
-    @return A list or dict of dicts
     '''
     def __init__(self, stream_or_string, encoding=settings.DEFAULT_CHARSET):
         if isinstance(stream_or_string, bytes):
@@ -239,9 +235,14 @@ class Reader():
         self.it = self.streamToIter(stream)
         self.linecount = 0
         self.line = None
-        self.mo = None    
+        self.mo = None  
+        self.exhausted = False
         #prime
-        self.get_line()        
+        try:
+            self.get_line()
+        except StopIteration:
+            # Will set iterator to return exception on __next__()
+            self.exhausted = True             
 
     def streamToIter(self, stream):
         for line in stream:
@@ -253,7 +254,6 @@ class Reader():
     def get_line(self):
         while (True):
             self.linecount += 1
-            #print(str(self.linecount))
             self.line = next(self.it)
             mo = ignoreRE.match(self.line)
             if (not mo):
@@ -268,69 +268,75 @@ class Reader():
         return bool(self.mo)        
         
     def get_value(self, builder):
-        #print('get value:' + str(builder))
         while(True):
-            self.get_line()
-            #print('get line:' + self.line)
+            try:
+                self.get_line()
+            except StopIteration:
+                # stop reading, EOF
+                self.exhausted = True
+                break
             if (self.section() or self.keyline()):
                 break
             builder.append(self.line)
         return ''.join(builder)
-      
+
     def __next__(self):
-        if (self.section()):
+        if (self.exhausted):
+            raise StopIteration
+        elif (self.section()):
             title = self.mo.group(1)
-            self.get_line()            
+            self.get_line()
             return Section(title)
         elif (self.keyline()):
             key = self.mo.group(1)
             value = self.get_value([self.mo.group(2)])
             return Entry(key, value)
-        raise ParsingError('parsing error, unrecognised line:{}\n"{}"'.format(
-            self.linecount,
-            self.line
-        ))
 
 
-#? messy logic
-#? not detecting initial kvs
-SectionData = collections.namedtuple('SectionData', 'title data')
-class DictReader():
-  
+
+SectionData = collections.namedtuple('SectionData', 'title entries')
+class DictReader():  
     def __init__(self, stream_or_string, encoding=settings.DEFAULT_CHARSET):
         self.reader = Reader(stream_or_string, encoding)
         self.event = None
-        self.kv_cache = {}
-        self.last_section_returned = False
+        self.exhausted = False
         #prime
         try:
-            self.event = self.reader.__next__()
+            self.get_event()
         except StopIteration:
-            # Will set iterator to return instant exception on __next__()
-            self.last_section_returned = True
+            # Will set iterator to return exception on __next__()
+            self.exhausted = True
 
     def __iter__(self):
         return self
         
-    def readKeyValues(self):
-        self.kv_cache = {}
+    def get_event(self):
+        self.event = self.reader.__next__()
+
+    def read_entries(self):
+        entries = {}
         while(True):
-            self.event = self.reader.__next__()
+            try:
+                self.get_event()
+            except StopIteration:
+                #EOF
+                self.exhausted = True
+                break
             if isinstance(self.event, Entry):
-                #print(str())
-                self.kv_cache[self.event.key] = self.event.value
+                entries[self.event.key] = self.event.value
                 continue
+        return entries
            
     def __next__(self):
         if isinstance(self.event, Section):
             title = self.event.data
-            try:
-                self.readKeyValues()
-            except StopIteration:
-                if(not self.last_section_returned):
-                    self.last_section_returned = True
-                else:
-                    raise StopIteration
-            return SectionData(title=title, data=self.kv_cache)
-        raise StopIteration
-
+            entries = self.read_entries()
+            return SectionData(title=title, entries=entries)
+        elif (self.exhausted):
+            raise StopIteration
+        else:
+            raise ParsingError('Expected a section mark line:{}\n"{}"'.format(
+                self.reader.linecount,
+                self.reader.line
+            ))
+  

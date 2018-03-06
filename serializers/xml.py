@@ -89,6 +89,7 @@ class Deserializer(NonrelationalDeserializer):
         """Create a hardened XML parser (no custom/external entities)."""
         return DefusedExpatParser()
 
+    #? update to match JSON and nonrelational_python
     def __next__(self):
         for event, node in self.event_stream:
             if event == "START_ELEMENT" and node.nodeName == "object":

@@ -79,3 +79,12 @@ class Serializer(NonrelationalSerializer):
 class Deserializer(NonrelationalDeserializer):
     def get_object_list(self, stream):
         return json.loads(stream.read())
+
+    def model_path_from_data(self, d):
+        return d['model']
+
+    def get_pk_from_data(self, d):
+        return d.get('pk')
+
+    def fields_from_data(self, d):
+        return d['fields']

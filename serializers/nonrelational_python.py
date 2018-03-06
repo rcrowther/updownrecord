@@ -29,6 +29,7 @@ class NonrelationalSerializer(nonrelational_base.NonrelationalSerializer):
         pass
 
     def start_object(self, obj):
+        self.verify_object_is_model(obj)
         self._current = OrderedDict()
 
     def end_object(self, obj):
@@ -36,7 +37,9 @@ class NonrelationalSerializer(nonrelational_base.NonrelationalSerializer):
         self._current = None
 
     def get_dump_object(self, obj):
-        data = OrderedDict([('model', str(obj._meta))])
+        data = OrderedDict([('model', self.model_path(obj))])
+        #obj_pk = obj.pk
+        #if obj_pk is not None:
         if not self.use_natural_primary_keys or not hasattr(obj, 'natural_key'):
             data["pk"] = self._value_from_field(obj, obj._meta.pk)
         data['fields'] = self._current
@@ -154,7 +157,7 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
     Deserialize a stream to Django Model instances.
     Requires a get_object_list() method to return a list of Python dicts 
     used as data for generating Models. The dicts must have the form
-    {model: pk: fields:}
+    {model: pk: fields:}. The 'pk' attribute is otional.
     If no parser can return the dicts, then this class can not be 
     implemented.
     """
@@ -170,12 +173,23 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
     def get_object_list(self, stream):
         raise NotImplementedError('subclasses of NonrelationalDeserializer must provide a get_object_list() method')
       
+    def model_path_from_data(self, d):
+        raise NotImplementedError('subclasses of NonrelationalDeserializer must provide a model_from_data() method')
+
+    def get_pk_from_data(self, d):
+        raise NotImplementedError('subclasses of NonrelationalDeserializer must provide a get_pk_from_data() method')
+
+    def fields_from_data(self, d):
+        raise NotImplementedError('subclasses of NonrelationalDeserializer must provide a fields_from_data() method')
+      
     def __next__(self):
         d = self.data_it.__next__()
         
         # Look up the model using the model loading mechanism.
+        model_path = None
         try:
-            model_class = self.get_model_class(d["model"])
+            model_path = self.model_path_from_data(d)
+            model_class = self.get_model_class(model_path)
         except base.DeserializationError:
             if self.ignore:
                 return self.__next__()
@@ -184,17 +198,18 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
 
         # Start building a data dictionary from the object.
         data = {}
-        if 'pk' in d:
+        pk = self.get_pk_from_data(d)
+        if (pk):
             try:
-                data[model_class._meta.pk.attname] = self.pk_to_python(model_class, d.get('pk'))
+                data[model_class._meta.pk.attname] = self.pk_to_python(model_class, pk)
             except Exception as e:
-                raise base.DeserializationError.WithData(e, d['model'], d.get('pk'), None)
+                raise base.DeserializationError.WithData(e, model_path, pk, None)
         if model_class not in self.field_names_cache:
             self.field_names_cache[model_class] = self.field_names(model_class)
         field_names = self.field_names_cache[model_class]
 
         # Handle each field
-        for (field_name, field_value) in d["fields"].items():
+        for (field_name, field_value) in self.fields_from_data(d).items():
             if self.ignore and field_name not in field_names:
                 continue
             field = model_class._meta.get_field(field_name)
@@ -204,7 +219,7 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
                 try:
                     data[field.name] = field.to_python(field_value)
                 except Exception as e:
-                    raise base.DeserializationError.WithData(e, d['model'], d.get('pk'), field_value)
+                    raise base.DeserializationError.WithData(e, model_path, pk, field_value)
 
         obj = base.build_instance(model_class, data, self.db)
         return base.DeserializedObject(obj)
