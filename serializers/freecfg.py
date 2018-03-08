@@ -1,7 +1,7 @@
-from django.apps import apps
-from django.core.serializers import base
+#from django.apps import apps
+#from django.core.serializers import base
 
-from .freecfg import Writer, DictReader
+from ..freecfg import Writer, DictReader
 from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 
 
@@ -11,7 +11,6 @@ class Serializer(NonrelationalSerializer):
     internal_use_only = False
 
     def start_serialization(self):
-        #self.obj_dict = {} 
         self.writer = Writer(self.stream)
 
     def end_object(self, obj):

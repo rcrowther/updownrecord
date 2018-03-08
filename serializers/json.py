@@ -1,15 +1,15 @@
 
 
-import datetime
-import decimal
+#import datetime
+#import decimal
 import json
-import uuid
+#import uuid
 
 from django.core.serializers.base import DeserializationError
 from django.core.serializers.json import DjangoJSONEncoder
-from django.utils.duration import duration_iso_string
-from django.utils.functional import Promise
-from django.utils.timezone import is_aware
+#from django.utils.duration import duration_iso_string
+#from django.utils.functional import Promise
+#from django.utils.timezone import is_aware
 
 from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 
@@ -50,7 +50,6 @@ class Serializer(NonrelationalSerializer):
         if indent:
             self.stream.write("\n")
         d = self.get_dump_object(obj)
-        print('dump obj:\n' + str(d))
 
         json.dump(self.get_dump_object(obj), self.stream, **self.json_kwargs)
         self._current = None
@@ -60,21 +59,6 @@ class Serializer(NonrelationalSerializer):
         return super(NonrelationalSerializer, self).getvalue()
 
 
-
-
-#def Deserializer(stream_or_string, **options):
-    #"""Deserialize a stream or string of JSON data."""
-    #if not isinstance(stream_or_string, (bytes, str)):
-        #stream_or_string = stream_or_string.read()
-    #if isinstance(stream_or_string, bytes):
-        #stream_or_string = stream_or_string.decode()
-    #try:
-        #objects = json.loads(stream_or_string)
-        #yield from NonrelationalDeserializer(objects, **options)
-    #except (GeneratorExit, DeserializationError):
-        #raise
-    ##except Exception as ex:
-    ##    raise DeserializationError() from ex
 
 class Deserializer(NonrelationalDeserializer):
     def get_object_list(self, stream):

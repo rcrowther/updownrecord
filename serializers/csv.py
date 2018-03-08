@@ -36,9 +36,7 @@ class Serializer(NonrelationalSerializer):
     def end_object(self, obj):
         #test object is the model_class
         d = self.get_dump_object(obj)
-        #print('dump obj:\n' + str(d))
         obj_dict = d['fields']
-        #obj_dict['model'] = do['model']
         obj_dict['pk'] = d['pk']
         self.writer.writerow(obj_dict)
 
@@ -97,7 +95,6 @@ class Deserializer(NonrelationalDeserializer):
             return csv.DictReader(self.stream, fieldnames=field_names, dialect=self.dialect)
 
     def model_path_from_data(self, d):
-        print('data:\n' + str(d))
         return self.model_path
 
     def get_pk_from_data(self, d):

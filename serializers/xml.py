@@ -1,16 +1,16 @@
 import io
 from xml.dom import pulldom
 
-from django.apps import apps
+#from django.apps import apps
 from django.conf import settings
 from django.core.serializers import base
 #? could go in django_menus
-from django.apps import apps
+#from django.apps import apps
 
 from xml.dom import pulldom
-from xml.sax import handler
-from xml.sax.expatreader import ExpatParser as _ExpatParser
-from django.db import DEFAULT_DB_ALIAS, models
+#from xml.sax import handler
+#from xml.sax.expatreader import ExpatParser as _ExpatParser
+from django.db import DEFAULT_DB_ALIAS #, models
 
 from .nonrelational_base import NonrelationalSerializer, NonrelationalDeserializer
 from django.utils.xmlutils import (

@@ -300,7 +300,7 @@ class DictReader():
         self.reader = Reader(stream_or_string, encoding)
         self.event = None
         self.exhausted = False
-        #prime
+        # prime
         try:
             self.get_event()
         except StopIteration:
@@ -324,7 +324,8 @@ class DictReader():
                 break
             if isinstance(self.event, Entry):
                 entries[self.event.key] = self.event.value
-                continue
+            else:
+                break
         return entries
            
     def __next__(self):
