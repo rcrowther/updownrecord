@@ -11,7 +11,7 @@ class Serializer(NonrelationalSerializer):
     internal_use_only = False
 
     def start_serialization(self):
-        self.obj_dict = {} 
+        #self.obj_dict = {} 
         self.writer = Writer(self.stream)
 
     def end_object(self, obj):

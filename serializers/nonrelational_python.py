@@ -219,7 +219,14 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
                 try:
                     data[field.name] = field.to_python(field_value)
                 except Exception as e:
-                    raise base.DeserializationError.WithData(e, model_path, pk, field_value)
+                    #raise base.DeserializationError.WithData(e, model_path, pk, field_value)
+                    raise base.DeserializationError("{}: ({}:pk={}) field:'{}': field_value:'{}'".format(
+                        e, 
+                        model_path, 
+                        pk, 
+                        field_name,
+                        field_value
+                    ))
 
         obj = base.build_instance(model_class, data, self.db)
         return base.DeserializedObject(obj)

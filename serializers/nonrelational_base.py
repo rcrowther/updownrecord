@@ -9,8 +9,18 @@ class UnserializableContentError(ValueError):
     pass
     
     
-    
-class NonrelationalSerializer(base.Serializer):
+class UtilityMixin():
+    def field_names(self, model_class):
+      return {f.name for f in model_class._meta.concrete_model._meta.local_fields if f.serialize}
+
+    def field_type(self, field):
+        return field.get_internal_type()
+
+    def model_path(self, obj):
+        return str(obj._meta)
+        
+                
+class NonrelationalSerializer(UtilityMixin, base.Serializer):
     """
     Abstract serializer base class.
     """
@@ -52,12 +62,6 @@ class NonrelationalSerializer(base.Serializer):
         if not hasattr(obj, "_meta"):
             raise base.SerializationError("Non-model object (%s) encountered during serialization" % type(obj))
 
-    def model_path(self, obj):
-        return str(obj._meta)
-        
-    def field_type(self, field):
-        return field.get_internal_type()
-        
     ## mechanism
     def serialize(self, queryset, *args, stream=None, fields=None,
                   use_natural_primary_keys=False, progress_output=None, object_count=0, **options):
@@ -89,7 +93,7 @@ class NonrelationalSerializer(base.Serializer):
 
 
 
-class NonrelationalDeserializer(base.Deserializer):
+class NonrelationalDeserializer(UtilityMixin, base.Deserializer):
     ignore = False
     
     #def __init__(self, stream_or_string, **options):
@@ -111,8 +115,8 @@ class NonrelationalDeserializer(base.Deserializer):
     def pk_to_python(self, model_class, pk_str):
         return model_class._meta.pk.to_python(pk_str)
                         
-    def field_names(self, model_class): 
-        return {f.name for f in model_class._meta.get_fields()}
+    #def field_names(self, model_class): 
+        #return {f.name for f in model_class._meta.get_fields()}
 
     def field_is_nonrelational(self, ignore, model_class, field):
         if (not field.remote_field):

@@ -6,9 +6,6 @@ import json
 import uuid
 
 from django.core.serializers.base import DeserializationError
-#from django.core.serializers.python import (
-#    Deserializer as PythonDeserializer, Serializer as PythonSerializer,
-#)
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils.duration import duration_iso_string
 from django.utils.functional import Promise
@@ -52,6 +49,9 @@ class Serializer(NonrelationalSerializer):
                 self.stream.write(" ")
         if indent:
             self.stream.write("\n")
+        d = self.get_dump_object(obj)
+        print('dump obj:\n' + str(d))
+
         json.dump(self.get_dump_object(obj), self.stream, **self.json_kwargs)
         self._current = None
 
