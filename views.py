@@ -11,6 +11,7 @@ from django.http import HttpResponse, Http404
 from django.views.generic import View
 from django.core import serializers as serializers
 
+#1 protect
 from quickviews import ModelCreateView, CreateView
 
 #from .xml_serializer import *
@@ -84,18 +85,17 @@ Django PKs are primary information (not meta information), pks are
 elements, not attributes,
 https://stackoverflow.com/questions/152313/xml-attributes-vs-elements
 '''
-StructureData = collections.namedtuple('StructureData', ['name', 'serializer', 'mime'])
-SerializationData = collections.namedtuple('SerializationData', ['format', 'mimes'])
+SerializationData = collections.namedtuple('SerializationData', ['format', 'mimes', 'file_extensions', 'model_required'])
 
-# First MIME is used as default (e.g. for default download guess)
+# First MIME/extension is used as default (e.g. for downloads)
 SERIALIZATION_DATA = [
-    SerializationData('json', ['text/json', 'application/json']),
-    SerializationData('xml', ['text/xml', 'application/xml']),
-    # place additions to core later, where they can not override a MIME
-    SerializationData("nonrel_csv",  ['text/csv']),
-    SerializationData("nonrel_freecfg", ['text/plain']),
-    SerializationData("nonrel_json", ['text/json', 'application/json']),
-    SerializationData("nonrel_xml", ['text/xml', 'application/xml']),
+    SerializationData('json', ['text/json', 'application/json'], ['json'], False),
+    SerializationData('xml', ['text/xml', 'application/xml'], ['xml'], False),
+    # place additions to core later, where they will not override MIME/extension etc. defaults
+    SerializationData("nonrel_csv",  ['text/csv'], ['csv'], True),
+    SerializationData("nonrel_freecfg", ['text/plain'], ['cfg', 'freecfg', 'ini'], False),
+    SerializationData("nonrel_json", ['text/json', 'application/json'], ['json'], False),
+    SerializationData("nonrel_xml", ['text/xml', 'application/xml'], ['xml'], False),
 ]
 
 def mime_map():
@@ -107,7 +107,17 @@ def mime_map():
     return b
 
 MIME_MAP = mime_map()
+
+def extension_map():
+    b = {}
+    for d in SERIALIZATION_DATA:
+        for extension in d.file_extensions:
+            if (not extension in b):
+              b[extension] = d
+    return b
     
+EXTENSION_MAP = extension_map()
+
 FORMAT_MAP = {d.format : d for d in SERIALIZATION_DATA}
 
 
@@ -315,228 +325,100 @@ _mime_map = {
     'application/xml' : 'xml'
 }
 
-_extension_map = {
-    'csv' : 'csv',
-    'json' : 'json',
-    'cfg': 'cfg',
-    'freecfg': 'freecfg',
-    'ini': 'cfg',
-    'xml': 'xml'
-}
+
 
 
 import re
 from configparser import ParsingError
 
+#! yes, want a forced must-deal-with this format and mime
 class UploadRecordView(CreateView):
-  pass
-    #'''
-    #Simple form to upload structured data to a model.
+    '''
+    Simple form to upload structured data to a model.
     
-    #The data must fit some loose conditions, outlines in detail in the
-    #app documentation.
+    Success may depend of the form of the data and deserialisation
+    chosen.
 
-    #@param formats limit the dta types (beyond the ability to process)
-    #@param file_size_limit in MB (e.g. value = 2 is 2MB)
-    #@param default for form of input file. Tried if MIME and and extension fail.
-    ##@param key_map a dict to map object field names -> keys from an
-    #uploaded file. Can be used to remove keys (don't list them).  
-    #'''
-    #model_class = None
-    #formats = ['cfg', 'freecfg', 'csv', 'json', 'xml']
-    ## for data type
-    #default = None
-    #force_insert = False
-    #file_size_limit = 2
-    ##key_map = {}
-    #popnone_normalize = True
-    ##success_url = self.return_url()
+    @param formats limit the dta types (beyond the ability to process)
+    @param file_size_limit in MB (e.g. value = 2 is 2MB)
+    @param default for form of input file. Tried if MIME and and extension fail.
+    '''
+    model_class = None
+    formats = ['cfg', 'freecfg', 'csv', 'json', 'xml']
+    # for data type
+    default = None
+    force_insert = False
+    file_size_limit = 2
+    popnone_normalize = True
+    #success_url = self.return_url()
     
-    #def __init__(self, **kwargs):
-        #super().__init__(**kwargs)
+    def __init__(self, **kwargs):
+        if (not 'object_name_field_key' in kwargs):
+            raise ImproperlyConfigured(
+                "DownloadRecordView requires a definition of 'object_name_field_key'")
+        self.object_name_field_key = kwargs['object_name_field_key']
+        super().__init__(**kwargs)
         #if (self.default and (not (self.default in self.formats))):
             #raise ImproperlyConfigured('{} default not found in data types. default:"{}", valid data types:{}'.format(
                 #self.__class__.__name__,
                 #self.default,
                 #', '.join(self.formats),
-                #))
-             
-        ##if (self.key_map):
-        ##    _validate_keymap(self.__class__.__name__, self.model_class, self.key_map)
-               
+                #))    
         
-    #def get_form(self, form_class=None):
-        #form_class = get_upload_form(self.file_size_limit)
-        #return super().get_form(form_class)
+    def get_form(self, form_class=None):
+        form_class = get_upload_form(self.file_size_limit)
+        return super().get_form(form_class)
         
-    #def get_type(self, uploadfile):
-        #tpe = None
-        ## try MIME
-        #mime = uploadfile.content_type
-        #tpe = _mime_map.get(mime)
-        #if (not tpe):
-            ## failed on mime, try extension
-            #base = os.path.basename(uploadfile.name)
-            #extension = None
-            #try:
-                #extension = base.rsplit('.', 1)[1]
-            #except IndexError:
-                #if (self.default):
-                    #extension = self.default
-                #else:
-                    #raise Http404("Failed to identify uploaded file from mime and no extension or default. mime:'{0}' extension:'{1}'".format(mime, extension))
+    def get_type(self, uploadfile):
+        format = None
+        # try MIME
+        mime = uploadfile.content_type
+        data = MIME_MAP.get(mime)
+        
+        if (not data):
+            # failed on mime, try extension
+            base = os.path.basename(uploadfile.name)
+            extension = None
+            try:
+                extension = base.rsplit('.', 1)[1]
+            except IndexError:
+                raise Http404("Failed to identify uploaded file from mime and unable to find extension. mime:'{0}'".format(
+                    mime
+                ))
                 
-            #tpe = _extension_map.get(extension)
-            #if (not tpe):
-                #raise Http404("Failed to identify uploaded file from mime or extension. mime:'{0}' extension:'{1}'".format(mime, extension))
-        #if (not(tpe in self.formats)):
-             #raise Http404('File type not accepted.')
-        #return tpe
+            data = EXTENSION_MAP.get(extension)
+            if (not data):
+                raise Http404("Failed to identify uploaded file from mime or extension. mime:'{0}' extension:'{1}'".format(
+                    mime, 
+                    extension
+                ))
+        return data.format
         
-    #def binaryToUTF8Iter(self, fileUploadObject):
-        #for line in fileUploadObject:
-            #yield line.decode('utf-8')
-            
-    #def binaryToUTF8Str(self, fileUploadObject):
-        #s = fileUploadObject.read()
-        #return s.decode('utf-8')
-
-    #def _cfg2dict(self, parser, section_name):
-        #b = {}
-        #for k, v in parser[section_name].items():
-            #b[k] = v
-        #return b
-                        
-    #def cfg2python(self, uploadfile):
-        #parser = configparser.ConfigParser()
-        #parser.read_file(self.binaryToUTF8Iter(uploadfile))
-        #sections = parser.sections()
-        #if (len(sections) > 1):
-            #l = []
-            #for section_name in sections:
-                #l.append(self._cfg2dict(parser, section_name))
-            #return l 
-        #else:
-            #return self._cfg2dict(parser, sections[0])
-            
-    #def freecfg2python(self, uploadfile):
-        #p = freecfg.Parser(seq_is_dict=False)
-        #pdata = p.parse_binary_iter(uploadfile)
-        ## if only one, strip the object_dict out of the list
-        #if (len(pdata) > 1):
-            #return pdata
-        #else:
-            #return pdata[0]
-                          
-    #def csv2python(self, uploadfile):
-        ## if CSV has headers, this reads ok
-        #reader = csv.DictReader(self.binaryToUTF8Iter(uploadfile))
-        #l = [obj_dict for obj_dict in reader]
-        #if (len(l) > 1):
-            #return l
-        #else:
-            ## if only one, strip the object_dict out of the list
-            #return l[0]
-
-    ## Note on the JSON implementation
-    ## This is nice, but handles as a chunk 
-    #def json2python(self, uploadfile):
-        #decoder = json.JSONDecoder(strict=True) #object_pairs_hook=collections.OrderedDict)
-        #l = decoder.decode(self.binaryToUTF8Str(uploadfile))
-        #return l
+    def binaryToUTF8Iter(self, fileUploadObject):
+        for line in fileUploadObject:
+            yield line.decode('utf-8')
         
-
-    #from xml.etree.ElementTree import XMLParser
-    #class DetectStarts():
-        #depth = 0
-        #closed = False
-        #def start(self, tag, attrib):
-            #if (not self.closed):
-                #self.depth += 1
-        #def end(self, tag):
-            #self.closed = True          
-        #def depth_decided(self):
-            #return self.closed
-
-    #def xml_find_depth(self, file_iter):
-        #ds = self.DetectStarts()
-        #parser = XMLParser(target=ds)
-        #for l in file_iter:
-            #parser.feed(l)
-            #if (ds.depth_decided()):
-                #break
-        #return ds.depth
-
-    #def _xml2dict(self, object_tag):
-        #b = {}
-        #for child in object_tag:
-            #b[child.tag] = child.text
-        #return b
-                        
-    ## Note on the XML implementation
-    ## Python's builtin XML parsers are ...not designed for this.
-    ## The current implementation is ugly (has_child traversal, 
-    ## where are you?)
-    ## The current implementation is also not robust, depending on 
-    ## tag depths constructed as per instructions. However,
-    ## we require our format for other styles, even if the XML 
-    ## iumplementation is particularly weak (blame XML itself here, too)
-    ## So this is adequate. For now. R.C.  
-    #def xml2python(self, uploadfile):
-        #depth = self.xml_find_depth(self.binaryToUTF8Iter(uploadfile))
-        #if (depth > 2):
-            ## we assume that is object descriptions and their container
-            ## i.e. queryset
-            #l = []
-            #root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
-            #for obj in root:
-                #l.append(self._xml2dict(obj))
-            #return l
-        #else:
-            ## assume container with object fields i.e. detail
-            #root = ET.fromstringlist(self.binaryToUTF8Iter(uploadfile))
-            #return self._xml2dict(root)
-
-    #_format_map = {
-        #'cfg' : StructureData(name='cfg', detailfunc=cfg2python, qsfunc=None, mime='text/plain'),
-        #'freecfg' : StructureData(name='freecfg', detailfunc=freecfg2python, qsfunc=None, mime='text/plain'),
-        #'csv' : StructureData(name='csv', detailfunc=csv2python, qsfunc=None, mime='text/csv'),
-        #'json' : StructureData(name='json', detailfunc=json2python, qsfunc=None, mime='application/json'),
-        #'xml' : StructureData(name='xml', detailfunc=xml2python, qsfunc=None, mime='text/xml')
-    #}
-
-    #def normalize(self, data):
-        #return data
-        
-    #def save_action(self, data):
-        #'''
-        #Map, normalise then save a dict object representation.
-        #'''
-        ##if (self.key_map):
-        ##    data = {k:data[v] for k, v in self.key_map.items() if v in data}
+    def save_action(self, data):
+        '''
+        Map, normalise then save a dict object representation.
+        '''
         #if (self.popnone_normalize):
-            #data = {k:v for k, v in data.items() if v}
-        #data = self.normalize(data)
-        #obj = self.model_class(**data)
-        #obj.save(force_insert=self.force_insert)
-        #return obj
+        #    data = {k:v for k, v in data.items() if v}
+        obj = self.model_class(**data)
+        obj.save(force_insert=self.force_insert)
+        return obj
         
-    #def success_action(self, form):
-        #obj = None
-        #uploadfile = self.request.FILES['data']
-        #format = self.get_type(uploadfile)
-        #structdata = self._format_map[format]
-        #data = structdata.detailfunc(self, uploadfile)
-        #if isinstance(data, list):
-            ##?use bulk save?
-            ##print('data')
-            ##print(str(data))
-            #for obj_dict in data:
-                #self.save_action(obj_dict)
-        #else:
-            ##print('data')
-            ##print(str(data))
-            #obj = self.save_action(data)
-        #return obj
-
-     
+    def success_action(self, form):
+        obj = None
+        uploadfile = self.request.FILES['data']
+        format = self.get_type(uploadfile)
+        obj= None
+        # Chime for Django: uploadfile objects are enough of an 
+        # iterable string or stream to go into a deserializer direct 
+        # R.C.
+        for dobject in serializers.deserialize(format, uploadfile):
+           obj = dobject.object
+           print(str(obj))           
+           #? Protect for recovery, or allow to explode on exception?
+           #dobject.object.save(force_insert=self.force_insert)
+        return obj
