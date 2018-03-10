@@ -19,6 +19,12 @@ class UtilityMixin():
     def model_path(self, obj):
         return str(obj._meta)
         
+    def verify_object_from_model_class(self, model_class, obj):
+        if not (obj._meta.model == model_class):
+            raise base.SerializationError("Object {} given to a serialiser handling class {}".format( 
+            type(obj), 
+            model_class._meta.object_name
+            ))
                 
 class NonrelationalSerializer(UtilityMixin, base.Serializer):
     """

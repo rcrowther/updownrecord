@@ -37,8 +37,6 @@ class NonrelationalSerializer(nonrelational_base.NonrelationalSerializer):
 
     def get_dump_object(self, obj):
         data = OrderedDict([('model', self.model_path(obj))])
-        #obj_pk = obj.pk
-        #if obj_pk is not None:
         if not self.use_natural_primary_keys or not hasattr(obj, 'natural_key'):
             data["pk"] = self._value_from_field(obj, obj._meta.pk)
         data['fields'] = self._current
@@ -126,7 +124,6 @@ class NonrelationalDeserializer(nonrelational_base.NonrelationalDeserializer):
                 try:
                     data[field.name] = field.to_python(field_value)
                 except Exception as e:
-                    #raise base.DeserializationError.WithData(e, model_path, pk, field_value)
                     raise base.DeserializationError("{}: ({}:pk={}) field:'{}': field_value:'{}'".format(
                         e, 
                         model_path, 

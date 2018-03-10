@@ -1,9 +1,9 @@
 import csv
 
-
 from django.db import DEFAULT_DB_ALIAS
-from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 from django.core.exceptions import ImproperlyConfigured
+
+from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 
 
 class Serializer(NonrelationalSerializer):
@@ -32,20 +32,13 @@ class Serializer(NonrelationalSerializer):
     def end_serialization(self):
         pass
 
-    def verify_object_from_model_class(self, model_class, obj):
-        if not (obj._meta.model == model_class):
-            raise base.SerializationError("Object of class {} given to a serialiser handling class {}".format( 
-            type(obj), 
-            model_class.model_name
-            ))
-
     def start_object(self, obj):
         self.verify_object_from_model_class(self.model_class, obj)
         super().start_object(obj)
 
     def end_object(self, obj):
         # test object is the model_class
-        model_path
+        self.verify_object_from_model_class(self.model_class, obj)
         d = self.get_dump_object(obj)
         obj_dict = d['fields']
         obj_dict['pk'] = d['pk']
@@ -66,7 +59,7 @@ class Deserializer(NonrelationalDeserializer):
         if (model_class is not None): 
             self.model_class = model_class
         if (self.model_class is None): 
-            raise ImproperlyConfigured('Must have a "model_class" attibute.')        
+            raise ImproperlyConfigured('Must have a "model_class" attribute.')        
         self.model_path = str(self.model_class._meta)
         if (dialect):
             self.dialect = dialect

@@ -1,15 +1,7 @@
-
-
-#import datetime
-#import decimal
 import json
-#import uuid
 
 from django.core.serializers.base import DeserializationError
 from django.core.serializers.json import DjangoJSONEncoder
-#from django.utils.duration import duration_iso_string
-#from django.utils.functional import Promise
-#from django.utils.timezone import is_aware
 
 from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 

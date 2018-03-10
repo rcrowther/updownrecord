@@ -1,16 +1,11 @@
 import io
 from xml.dom import pulldom
 
-#from django.apps import apps
 from django.conf import settings
 from django.core.serializers import base
-#? could go in django_menus
-#from django.apps import apps
 
 from xml.dom import pulldom
-#from xml.sax import handler
-#from xml.sax.expatreader import ExpatParser as _ExpatParser
-from django.db import DEFAULT_DB_ALIAS #, models
+from django.db import DEFAULT_DB_ALIAS
 
 from .nonrelational_base import NonrelationalSerializer, NonrelationalDeserializer
 from django.utils.xmlutils import (
@@ -19,10 +14,7 @@ from django.utils.xmlutils import (
 
 from django.core.serializers.xml_serializer import getInnerText, DefusedExpatParser
 
-#? Things to learn here
-#? use xml char stuff for csv and freeconf?
-#? check meta
-#? type from field
+
         
 class Serializer(NonrelationalSerializer):        
     def indent(self, level):
@@ -72,12 +64,6 @@ class Serializer(NonrelationalSerializer):
 
 
 
-
-#? ignore on freeconf and csv (or remove?)
-#? mapping as generic function
-#? generic filter for field names?
-#? generic block on relational fields?
-#? generic field to python?
 class Deserializer(NonrelationalDeserializer):
     def __init__(self, stream_or_string, *, using=DEFAULT_DB_ALIAS, ignorenonexistent=False, **options):
         super().__init__(stream_or_string, **options)
@@ -89,7 +75,6 @@ class Deserializer(NonrelationalDeserializer):
         """Create a hardened XML parser (no custom/external entities)."""
         return DefusedExpatParser()
 
-    #? update to match JSON and nonrelational_python
     def __next__(self):
         for event, node in self.event_stream:
             if event == "START_ELEMENT" and node.nodeName == "object":

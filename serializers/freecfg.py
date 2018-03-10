@@ -1,6 +1,3 @@
-#from django.apps import apps
-#from django.core.serializers import base
-
 from ..freecfg import Writer, DictReader
 from .nonrelational_python import NonrelationalSerializer, NonrelationalDeserializer
 
