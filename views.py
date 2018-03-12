@@ -1,8 +1,6 @@
 import io
 import collections
 import os
-import copy
-import importlib
 
 
 from django import forms
@@ -11,11 +9,9 @@ from django.http import HttpResponse, Http404
 from django.views.generic import View
 from django.core import serializers as serializers
 
-#1 protect
+#! protect
 from quickviews import ModelCreateView, CreateView
 
-#from .xml_serializer import *
-#from .serializers import csv, json, freecfg, xml
 
 
 '''
@@ -85,7 +81,7 @@ Django PKs are primary information (not meta information), pks are
 elements, not attributes,
 https://stackoverflow.com/questions/152313/xml-attributes-vs-elements
 '''
-SerializationData = collections.namedtuple('SerializationData', ['format', 'mimes', 'file_extensions', 'model_required'])
+SerializationData = collections.namedtuple('SerializationData', ['format', 'mimes', 'file_extensions', 'requires_model'])
 
 # First MIME/extension is used as default (e.g. for downloads)
 SERIALIZATION_DATA = [
@@ -122,13 +118,6 @@ FORMAT_MAP = {d.format : d for d in SERIALIZATION_DATA}
 
 
 
-#! introduce 'ignore'
-#! remove popnone
-#! use new serializers (how?)
-#? remove 'model in filename' option
-#? size limit (on what?)
-# consider MIME and how to choose a mime for a serializer
-# how to pass class to csv serializer?
 class DownloadRecordView(View):
     '''
     
@@ -166,6 +155,7 @@ class DownloadRecordView(View):
     which makes the filename closer to a unique name, set 
     'model_in_filename=True'.
     
+    @param format format to serialze to (required).
     @param model_class only classes of this model wil be allowed.
     @param pk_url_kwarg name of argument for pks
     @param use_querysets override the pk_url_kwarg for query handling.
@@ -182,25 +172,32 @@ class DownloadRecordView(View):
     queryset_page_size = 25
     selection_id = 'query'
     #include_pk = True
+    serializer_options = {}
     model_in_filename = False
       
     def __init__(self, **kwargs):
-        if ('format' in kwargs):
-            self.format = kwargs['format']
+        super().__init__(**kwargs)
         if (not self.format):
             raise ImproperlyConfigured(
                 "DownloadRecordView requires a definition of 'format'")
-        if ('mime' in kwargs):
-            self.mime = kwargs['mime']
-        else:
-            data = FORMAT_MAP.get(self.format, None)
-            if (not data):
+
+        serializer_data = FORMAT_MAP.get(self.format, None)
+                
+        if (serializer_data and serializer_data.requires_model):
+            if (not self.model_class):
+                raise ImproperlyConfigured(
+                    "DownloadRecordView configured with format '{}'. This format requires a model_class attribute to be declared.".format(
+                    self.format
+                    ))             
+            self.serializer_options['model_class'] = self.model_class
+
+        if (not self.mime):
+            if (not serializer_data):
                 raise ImproperlyConfigured(
                     "DownloadRecordView requires a MIME type. No default found for the format (and no MIME provided via 'mime' parameter): format:'{}'".format(
                     self.format
                     ))
-            self.mime = data.mimes[0]            
-        super().__init__(**kwargs)
+            self.mime = serializer_data.mimes[0]            
 
     def model_name(self):
         return self.model_class._meta.model_name
@@ -286,7 +283,8 @@ class DownloadRecordView(View):
             qs = self.get_queryset()
         s = serializers.get_serializer(self.format)
         serializer = s()
-        serializer.serialize(qs)          
+          
+        serializer.serialize(qs, **self.serializer_options)          
         # set content and type
         response = HttpResponse(serializer.getvalue(), content_type=self.mime)
         dstfilename = self.destination_filename(self.selection_id, self.format)
@@ -312,26 +310,8 @@ def get_upload_form(file_size_limit=None):
 
 
 
-# These two dicts are for purposes of identifying files.
-# The data has no need to be complete. If data is provided,
-# it should be a close guess at intention (e.g. do not try to make all 
-# 'text/' mimes into config files. But 'text/xml' wants to be known as 
-# XML)
-_mime_map = {
-    'text/csv' : 'csv',
-    'text/json' : 'json',
-    'application/json' : 'json',
-    'text/xml' : 'xml',
-    'application/xml' : 'xml'
-}
 
 
-
-
-import re
-from configparser import ParsingError
-
-#! yes, want a forced must-deal-with this format and mime
 class UploadRecordView(CreateView):
     '''
     Simple form to upload structured data to a model.
@@ -339,37 +319,36 @@ class UploadRecordView(CreateView):
     Success may depend of the form of the data and deserialisation
     chosen.
 
-    @param formats limit the dta types (beyond the ability to process)
+    @param model_class limit the format to this (do not guess)
+    @param format limit the format to this (do not guess)
     @param file_size_limit in MB (e.g. value = 2 is 2MB)
-    @param default for form of input file. Tried if MIME and and extension fail.
     '''
     model_class = None
-    formats = ['cfg', 'freecfg', 'csv', 'json', 'xml']
-    # for data type
-    default = None
+    format = None
     force_insert = False
     file_size_limit = 2
     popnone_normalize = True
+    deserialize_options = {}
     #success_url = self.return_url()
     
     def __init__(self, **kwargs):
-        if (not 'object_name_field_key' in kwargs):
-            raise ImproperlyConfigured(
-                "DownloadRecordView requires a definition of 'object_name_field_key'")
-        self.object_name_field_key = kwargs['object_name_field_key']
         super().__init__(**kwargs)
-        #if (self.default and (not (self.default in self.formats))):
-            #raise ImproperlyConfigured('{} default not found in data types. default:"{}", valid data types:{}'.format(
-                #self.__class__.__name__,
-                #self.default,
-                #', '.join(self.formats),
-                #))    
+        
+        serializer_data = FORMAT_MAP.get(self.format, None)
+                
+        if (serializer_data and serializer_data.requires_model):
+            if (not self.model_class):
+                raise ImproperlyConfigured(
+                    "UploadRecordView configured with format '{}'. This format requires a model_class attribute to be declared.".format(
+                    self.format
+                    ))             
+            self.deserialize_options['model_class'] = self.model_class
         
     def get_form(self, form_class=None):
         form_class = get_upload_form(self.file_size_limit)
         return super().get_form(form_class)
         
-    def get_type(self, uploadfile):
+    def guess_format(self, uploadfile):
         format = None
         # try MIME
         mime = uploadfile.content_type
@@ -393,32 +372,30 @@ class UploadRecordView(CreateView):
                     extension
                 ))
         return data.format
-        
-    def binaryToUTF8Iter(self, fileUploadObject):
-        for line in fileUploadObject:
-            yield line.decode('utf-8')
-        
-    def save_action(self, data):
-        '''
-        Map, normalise then save a dict object representation.
-        '''
-        #if (self.popnone_normalize):
-        #    data = {k:v for k, v in data.items() if v}
-        obj = self.model_class(**data)
-        obj.save(force_insert=self.force_insert)
-        return obj
+            
+    #def save_action(self, data):
+        #'''
+        #Map, normalise then save a dict object representation.
+        #'''
+        ##if (self.popnone_normalize):
+        ##    data = {k:v for k, v in data.items() if v}
+        #obj = self.model_class(**data)
+        #obj.save(force_insert=self.force_insert)
+        #return obj
         
     def success_action(self, form):
         obj = None
         uploadfile = self.request.FILES['data']
-        format = self.get_type(uploadfile)
+        format = self.format if (self.format) else self.guess_format(uploadfile)
         obj= None
         # Chime for Django: uploadfile objects are enough of an 
-        # iterable string or stream to go into a deserializer direct 
+        # iterable string or stream to go into a deserializer direct
+        # But only our serializers, as some parsers will not handle 
+        # bytes... 
         # R.C.
-        for dobject in serializers.deserialize(format, uploadfile):
-           obj = dobject.object
-           print(str(obj))           
+        for deserialized_object in serializers.deserialize(format, uploadfile, **self.deserialize_options):
+           obj = deserialized_object.object
+           print('ouput object:' + str(obj))           
            #? Protect for recovery, or allow to explode on exception?
-           #dobject.object.save(force_insert=self.force_insert)
+           # deserialized_object.object.save(force_insert=self.force_insert)
         return obj

@@ -1,7 +1,3 @@
-
-#from .freeconfig import Serializer, Deserializer
-#from .csv import Serializer, Deserializer
-
 """
 To add the serialisers for general use, add this to the settings file::
 

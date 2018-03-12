@@ -1,6 +1,6 @@
 Updownrecord
 ============
-Upload and download data to a Django installation via web forms. The data is structured as records (model instances) that can be in various formats ('ini', 'json' etc.).
+Upload and download data to a Django installation via web forms. The data is structured as records (model instances) that can be in various formats ('xml', 'json' etc.).
 
 
 When to use this application
@@ -11,18 +11,18 @@ The app assumes the user is able to understand the idea of a model. Not that the
 
 In return the user gets silly-easy and efficient data upload/download. Bear in mind, this is not the usual file-upload scenario. The user has supplied text-based structured data. The data is moved as one, no mess with field-fractured web forms.  
 
-I'd trust users to be able to do this, and enjoy the advantages. I suppose some people may feel that only admins can do this, and so place the ability under admin control. Bear in mind that Django security is still operative.
+I'd trust users to be able to do this, and enjoy the advantages. I suppose some people may feel that only admins should do this, and so place the ability under admin control. Bear in mind that Django security is still operative.
 
-The reverse ability, to download a record from a remote location, provides a way to supply human-readable site data. The data is not functionally useless or a dump. It has possibilities.
+The reverse ability, to download a record from a remote location, provides a way to supply human-readable data from the models structuring a website. The data is not functionally useless or a dump. It has possibilities.
 
 
 Limitations
 -----------
-Self-contained records only (foreign keys are unsupported) 
+Setup needs consideration for security.
 
 Only handles CSV, FREECFG (see below), JSON, and XML (that's a limitation? Someone will probably think so).
 
-Text encoding must be UTF-8
+Text encoding must be UTF-8.
 
 High performance? Not likely.
 
@@ -39,16 +39,9 @@ What? Umm, an SQL script? Fabric? All the rest of that database maintenance equi
 
 Status
 ------
-This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, and a constantly changing API.
+This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, Django's implementation, and a constantly changing API.
 
 Do not rely on the API. Fortunately, the app is a leaf node, ending with users. No worry about dependancies.
-
-
-About data structuring
-----------------------
-The code contains extensive notes. In short, each download is resolved into a structure something like, for an object, object-as-dict; and for a queryset, list(object-as-dict()).
-
-Uploads are treated in a similar way. This will not work for all data. For example, it is unusual to use 'ini' type files for consecutive record storage (this app enables that). Or, the SaveRecordView can not handle Microsoft Excel CSV output. However, all the handled formats are text-based, so should be easy to edit into a form where they will upload.
 
 
 Install
@@ -60,23 +53,50 @@ In settings.py, ::
         'updownrecord.apps.UpdownrecordConfig',
         ]
 
+If you want to use the included 'non-relational'serializers, add also, ::
+
+    SERIALIZATION_MODULES = {
+        "nonrel_csv": "updownrecord.serializers.csv",
+        "nonrel_freecfg": "updownrecord.serializers.freecfg",
+        "nonrel_json": "updownrecord.serializers.json",
+        "nonrel_xml": "updownrecord.serializers.xml",
+    }
+    
 
 Usage
 -----
 Data forms
 ~~~~~~~~~~
-CSV, CFG (microsoft '.ini'), JSON, and XML are well-known formats. The file views.py contains extensive notes on how the app handles them, especially for upload. Briefly, all are treated as a dictionary of key->value pairs, and must be in that 
-format.
+JSON and XML are well-known formats.
 
-A couple of notes:
+The app uses Django serialisers when asked. It also includes four more 
+'non-relational' serializers. These will not, by specication, handle 
+relations between models. Using these serializers is a kind of 
+data-throttling, which can also help prevent exposing sensitive data.
+The JSON and XML versions save data in a form compatible with Django
+serializers.
+
+The 'non-relational' serializers offer two extra, perhaps unusual, 
+serialization formats. Both are interesting because they are easy
+to read and hand-edit (unlike, especially, XML). The formats are, ::
 
 CSV
-    Operates with or without a header line
+    Comma Seeparated Values. Operates with or without a header line
     
-FREECFG
-    FREECFG is a home-made format which works round some limitations of the CFG format/Python parser. The parser has no capacity for escapes, and whitespace is stripped from all keys and values. FREECFG requires keys to adhere to regex '\w+' i.e '[^a-zA-Z0-9\_]+'. 
+FREECFG/CFG
+    FREECFG is a home-made format which is similar to Microsoft 'ini' 
+    files, but works round some limitations of the CFG format/Python 
+    parser. The parser has no capacity for escapes, and whitespace is 
+    stripped from all keys and values. FREECFG requires keys to adhere 
+    to regex '\w+' i.e '[^a-zA-Z0-9\_]+'. 
     
-    FREECFG has advantages. Section headers can be any string. The parser can run with no section headers. Comments are inital hash/pound, and valid anywhere. Values can be any length, including paragraphs (only the start and end of values are stripped).
+    FREECFG has advantages. Section headers can be any string. The 
+    parser can run with no section headers. Comments are inital 
+    hash/pound, and valid anywhere. Values can be any length, including 
+    paragraphs (only the start and end of values are stripped).
+
+Serialized CSV is compact and very easy to machine-edit. FreeCFG is a
+format that most people can understand and modify.
 
 Download
 ~~~~~~~~
@@ -84,7 +104,7 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
     from updownrecord import views
 
-    url(r'^(?P<pk>[0-9]+)/download/$', views.DownloadView.as_view(model=Firework, data_type="csv")),
+    url(r'^(?P<pk>[0-9]+)/download/$', views.DownloadView.as_view(model=Firework, format="csv")),
 
 (that line uses the default url parameter name of 'pk') Now download object pk=9 as CSV, ::
 
@@ -97,7 +117,7 @@ Downloading object ranges
 +++++++++++++++++++++++++
 DownloadView can be set to download 'page' ranges, ::
 
-    url(r'^download/$', views.DownloadView.as_view(use_querysets=True, data_type="json")),
+    url(r'^download/$', views.DownloadView.as_view(use_querysets=True, format="json")),
 
 Note the use of the explicit 'use_querysets' value to trigger queryset handling. By default, queryset handling is from the URL querystring, pages are 25 objects. So, to download items pk=50-75 as JSON, ::
  
@@ -109,7 +129,7 @@ Queryset handling can be overridden to whatever you wish ( e.g. search for title
 Options
 +++++++
 model_class
-    State the model. Required.
+    State the model. Required (for most configurations).
 
 pk_url_kwarg
     A URL argument to be found in a calling URL.
@@ -120,15 +140,8 @@ use_querysets
 include_pk
     if False will strip the pk field from downloads.
     
-data_type
-    (default='JSON') Format data to this type, can be any of the types listed in the formats.
-    
-key_map
-    A dict to map Model keys -> input keys. So if an input record names a field 'description', and the Model names the field 'desc', join the values (you can also drop input fields by not declaring them), ::
-        
-        url(r'^upload/$', DownloadloadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
-
-    The same key map can be used as in UploadRecordView, see below.
+format
+    (default='xml') Format data to this type, can be any of the types listed in the formats.
 
 model_in_filename
     Adds the model name to the offered download filename.
@@ -141,13 +154,13 @@ Upload is a simple one-field form.
 
 Upload uses the same 'save' dynamic as the Django ORM; if a pk (or, for auto-increment, an 'id' field) is present, then the upload updates. If not, the upload appends.
 
-Upload guesses at the form of the file. This can be limited to one form e.g. ::
+Upload guesses at the form of the file (the code tries the MIME and the file extension of the uploaded file). It can be limited to one format by setting the 'format' attribute e.g. ::
 
-    data_types = ['csv']
+    format = 'csv'
 
 Enable a view. One line in a URL (if not complicated configuration), ::
 
-    url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework)),
+    url(r'^save/$', views.UploadRecordView.as_view(model_class=Firework), object_name_field_key='title'),
 
 Normalise
 +++++++++
@@ -166,7 +179,14 @@ However, that example duplicates an existing action. See below for popnone_norma
 
 Other options
 +++++++++++++
+object_name_field_key
+    Inherited from the underlying view. States a field to use for a title
+    in informative messages.
 
+success_url
+    Inherited from the underlying view. Redirect to the value of this
+    attribute if the upload action is successful.
+        
 file_size_limit
     limit filesize (in MB), ::
 
@@ -182,14 +202,6 @@ default
     Set a type if mime/extension detection fails, ::
 
         url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, default='json')),
-
-key_map
-    A dict to map Model keys -> input keys. So if an input record names a field 'description', and the Model names the field 'desc', join the values (you can also drop input fields by not declaring them), ::
-        
-        url(r'^upload/$', UploadRecordView.as_view(model_class=Firework, key_map={'desc' : 'description'}))
-
-    The same key map can be used as in DownloadRecordView, see above.
-
 
 popnone_normalize
     Normalise by removing (popping) any field value that tests as boolean False, such as empty strings (default=True).

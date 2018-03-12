@@ -15,7 +15,7 @@ class Serializer(NonrelationalSerializer):
         if (model_class is not None): 
             self.model_class = model_class
         if (self.model_class is None): 
-            raise ImproperlyConfigured('Must have a "model_class" attibute.')  
+            raise ImproperlyConfigured('CSV Serializer must have a "model_class" attibute.')  
         #! test is model
         return super().serialize(queryset, *args, stream=stream, fields=fields,
                   use_natural_primary_keys=use_natural_primary_keys, progress_output=progress_output, object_count=object_count, **options)
@@ -59,12 +59,15 @@ class Deserializer(NonrelationalDeserializer):
         if (model_class is not None): 
             self.model_class = model_class
         if (self.model_class is None): 
-            raise ImproperlyConfigured('Must have a "model_class" attribute.')        
+            raise ImproperlyConfigured('CSV Deserializer must have a "model_class" attribute.')        
         self.model_path = str(self.model_class._meta)
         if (dialect):
             self.dialect = dialect
         if (has_header):
             self.has_header = has_header
+        #? Mobe this shit to nonrel base
+        #? encode with optional encoding
+   
         super().__init__(stream_or_string, *args, using=using, ignorenonexistent=ignorenonexistent, **options)
 
     def get_object_list(self, stream):

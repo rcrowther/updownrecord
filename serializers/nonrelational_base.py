@@ -10,6 +10,13 @@ class UnserializableContentError(ValueError):
     
     
 class UtilityMixin():
+    def ensure_string(self, stream_or_string, encoding):
+        if not isinstance(stream_or_string, (bytes, str)):
+            stream_or_string = stream_or_string.read()
+        if isinstance(stream_or_string, bytes):
+            stream_or_string = stream_or_string.decode(encoding)
+        return stream_or_string
+         
     def field_names(self, model_class):
       return {f.name for f in model_class._meta.concrete_model._meta.local_fields if f.serialize}
 
@@ -26,10 +33,16 @@ class UtilityMixin():
             model_class._meta.object_name
             ))
                 
+                
+# NB: if ever these need altering, the code is mostly
+# django.core.serializers.base.py, with the relational handling 
+# overridden to error.
 class NonrelationalSerializer(UtilityMixin, base.Serializer):
     """
     Abstract serializer base class.
     """
+    encoding = 'utf-8'
+
     # some helpers
     def _verify_no_control_characters(self, content):
         if content and re.search(r'[\x00-\x08\x0B-\x0C\x0E-\x1F]', content):
@@ -75,6 +88,11 @@ class NonrelationalSerializer(UtilityMixin, base.Serializer):
         # it will not. Not in my rig, anyway. This code line replicates 
         # the super() line from a Django I have downloaded. R.C.
         stream = stream if stream is not None else self.stream_class()
+        # This is new, an assertion of stringification and decoding.
+        # While expensive, some parsers can not handle byte input.
+        if ('encoding' in options):
+            self.encoding = options.pop('encoding')
+        string = self.ensure_string(stream, self.encoding)
         return super().serialize(queryset, *args, stream=stream, fields=fields, use_natural_foreign_keys=False,
                   use_natural_primary_keys=use_natural_primary_keys, progress_output=progress_output, object_count=object_count, **options)
         
@@ -101,9 +119,15 @@ class NonrelationalSerializer(UtilityMixin, base.Serializer):
 
 class NonrelationalDeserializer(UtilityMixin, base.Deserializer):
     ignore = False
+    encoding = 'utf-8'
     
-    #def __init__(self, stream_or_string, **options):
-    #  super().__init__(stream_or_string, **options)
+    def __init__(self, stream_or_string, **options):
+        # This is new, an assertion of stringification and decoding.
+        # While expensive, some parsers can not handle byte input.
+        if ('encoding' in options):
+            self.encoding = options.pop('encoding')
+        string = self.ensure_string(stream_or_string, self.encoding)
+        super().__init__(string, **options)
 
     ## helpers
     def get_model_class(self, model_path):
@@ -120,9 +144,6 @@ class NonrelationalDeserializer(UtilityMixin, base.Deserializer):
 
     def pk_to_python(self, model_class, pk_str):
         return model_class._meta.pk.to_python(pk_str)
-                        
-    #def field_names(self, model_class): 
-        #return {f.name for f in model_class._meta.get_fields()}
 
     def field_is_nonrelational(self, ignore, model_class, field):
         if (not field.remote_field):

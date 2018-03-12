@@ -14,6 +14,11 @@ from django.core.serializers.base import DeserializationError
 
 
 
+
+# NB: if ever these need altering, the code for Serializer is like
+# django.core.serializers.python.py, with no relational handling. The
+# code for Deserializer is not similar at all, Django Deserializer uses 
+# a generator method, this uses a class which complements the Srializer. 
 class NonrelationalSerializer(nonrelational_base.NonrelationalSerializer):
     """
     Serialize a QuerySet to basic Python objects.
