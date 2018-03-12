@@ -18,7 +18,10 @@
 #? remove natural_pk
 
 = General
+#! pk encryption
+#! quickviews test
 #! the pk issue, eliminate on download/upload, where and to what effect?
+#! pk issue an issue when you can force_insert?
 #? Admin protection
 #? check charsets
 #? allow args to parsers (e.g 'dialect' to CSV dictwriter)

@@ -1,6 +1,6 @@
 Updownrecord
 ============
-Upload and download data to a Django installation via web forms. The data is structured as records (model instances) that can be in various formats ('xml', 'json' etc.).
+Upload and download data to a Django installation via web forms. The data is structured as records (model instances) that can be in various formats ('xml', 'json' etc.). 
 
 
 When to use this application
@@ -22,8 +22,6 @@ Setup needs consideration for security.
 
 Only handles CSV, FREECFG (see below), JSON, and XML (that's a limitation? Someone will probably think so).
 
-Text encoding must be UTF-8.
-
 High performance? Not likely.
 
 
@@ -39,7 +37,7 @@ What? Umm, an SQL script? Fabric? All the rest of that database maintenance equi
 
 Status
 ------
-This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, Django's implementation, and a constantly changing API.
+This has been a tedious and time-consuming app to write. The problems are the uneven APIs for Python parsers (though I am glad they are available and developed), resolution of approaches to data structuring, Django's Serialization implementation, and a constantly changing API.
 
 Do not rely on the API. Fortunately, the app is a leaf node, ending with users. No worry about dependancies.
 
@@ -72,9 +70,9 @@ JSON and XML are well-known formats.
 The app uses Django serialisers when asked. It also includes four more 
 'non-relational' serializers. These will not, by specication, handle 
 relations between models. Using these serializers is a kind of 
-data-throttling, which can also help prevent exposing sensitive data.
-The JSON and XML versions save data in a form compatible with Django
-serializers.
+data-throttling, which can also help prevent exposing sensitive data. 
+Text encoding can be anything, 'UTF-8' default. The JSON and XML 
+versions save data in a form compatible with Django serializers.
 
 The 'non-relational' serializers offer two extra, perhaps unusual, 
 serialization formats. Both are interesting because they are easy
@@ -123,7 +121,7 @@ Note the use of the explicit 'use_querysets' value to trigger queryset handling.
  
     http://127.0.0.1:8000/updownrecord/download?page=2 
 
-Queryset handling can be overridden to whatever you wish ( e.g. search for titles?) by fully overriding get_queryset().
+Queryset handling can be overridden to whatever you wish (e.g. search for titles?) by fully overriding get_queryset().
 
 
 Options

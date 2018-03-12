@@ -395,7 +395,7 @@ class UploadRecordView(CreateView):
         # R.C.
         for deserialized_object in serializers.deserialize(format, uploadfile, **self.deserialize_options):
            obj = deserialized_object.object
-           print('ouput object:' + str(obj))           
+           #print('ouput object:' + str(obj))           
            #? Protect for recovery, or allow to explode on exception?
-           # deserialized_object.object.save(force_insert=self.force_insert)
+           deserialized_object.object.save(force_insert=self.force_insert)
         return obj
