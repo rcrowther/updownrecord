@@ -1,3 +1,12 @@
+= General
+#! pk encryption
+#! the pk issue, eliminate on download/upload, where and to what effect?
+#! pk issue an issue when you can force_insert?
+#? Admin protection
+#? check charsets
+#? allow args to parsers (e.g 'dialect' to CSV dictwriter)
+#? redirect or something on DownloadView
+
 = Downloads
 #? should write 'nonrel_*' as extension, or provide extension names?
 #? pk detection more than model.default_manager.pk, I recall
@@ -17,15 +26,7 @@
 #? XML to python bases, like other serializers
 #? remove natural_pk
 
-= General
-#! pk encryption
-#! quickviews test
-#! the pk issue, eliminate on download/upload, where and to what effect?
-#! pk issue an issue when you can force_insert?
-#? Admin protection
-#? check charsets
-#? allow args to parsers (e.g 'dialect' to CSV dictwriter)
-#? redirect or something on DownloadView
+
 
 
 Handle relational fields if possible, otherwise 

@@ -10,9 +10,10 @@ from django.views.generic import View
 from django.core import serializers as serializers
 
 #! protect
-from quickviews import ModelCreateView, CreateView
-
-
+try:
+    from quickviews import ModelCreateView, CreateView
+except ImportError:
+    raise ImportError('UpdownRecord requires the Quickviews module.')
 
 '''
 == Structure of data
