@@ -373,30 +373,29 @@ class UploadRecordView(CreateView):
                     extension
                 ))
         return data.format
-            
-    #def save_action(self, data):
-        #'''
-        #Map, normalise then save a dict object representation.
-        #'''
-        ##if (self.popnone_normalize):
-        ##    data = {k:v for k, v in data.items() if v}
-        #obj = self.model_class(**data)
-        #obj.save(force_insert=self.force_insert)
-        #return obj
         
     def success_action(self, form):
-        obj = None
         uploadfile = self.request.FILES['data']
         format = self.format if (self.format) else self.guess_format(uploadfile)
-        obj= None
+        gather_pks = bool(self.model_class)
+        msg_b = []
+
         # Chime for Django: uploadfile objects are enough of an 
         # iterable string or stream to go into a deserializer direct
         # But only our serializers, as some parsers will not handle 
         # bytes... 
         # R.C.
         for deserialized_object in serializers.deserialize(format, uploadfile, **self.deserialize_options):
-           obj = deserialized_object.object
-           #print('ouput object:' + str(obj))           
-           #? Protect for recovery, or allow to explode on exception?
-           deserialized_object.object.save(force_insert=self.force_insert)
-        return obj
+            obj = deserialized_object.object
+            #print('ouput object:' + str(obj))           
+            #? Protect for recovery, or allow to explode on exception?
+            obj.save(force_insert=self.force_insert)
+            msg_b.append((obj._meta.model._meta.object_name, obj.pk))
+            
+        if (gather_pks):
+            pks = [str(e[1]) for e in msg_b]
+            msg = '{}:{}'.format(self.model_class._meta.object_name, ', '.join(pks)) 
+        else:
+            model_details = ['{}:{}'.format(e[0], e[1]) for e in msg_b]
+            msg = ', '.join(model_details) 
+        return msg

@@ -163,10 +163,6 @@ Enable a view. One line in a URL (if not complicated configuration), ::
 
 Other options
 +++++++++++++
-object_name_field_key
-    Inherited from the underlying view. States a field to use for a title
-    in informative messages.
-
 success_url
     Inherited from the underlying view. Redirect to the value of this
     attribute if the upload action is successful.
