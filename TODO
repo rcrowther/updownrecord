@@ -2,6 +2,7 @@
 #! pk encryption
 #! the pk issue, eliminate on download/upload, where and to what effect?
 #! pk issue an issue when you can force_insert?
+# NB: always have a pk, use force insert, like Django policy
 #? Admin protection
 #? check charsets
 #? allow args to parsers (e.g 'dialect' to CSV dictwriter)
@@ -9,18 +10,17 @@
 
 = Downloads
 #? should write 'nonrel_*' as extension, or provide extension names?
-#? pk detection more than model.default_manager.pk, I recall
+#? pk detection more than model.default_manager.pk, I recall default_manager?
 #? size limitations on download
-#? model class not enforced on download
 #? bulk saving
 #? MIMEs are plain/text for page downloads (wrong)
 #? remove 'model in filename' option, or use app name?
 
 = Upload Deserializers
-#? enable ignorenonexistent
+#? enable ignore/ignorenonexistent
+#? ignore seems to apply to fields only (what about different models?)
 #? popnone, or not
 #! yes, want a forced must-deal-with this format/mime/class
-#? Createview needs more fexible messages
 
 = Serializers
 #? XML to python bases, like other serializers

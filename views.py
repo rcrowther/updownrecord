@@ -295,8 +295,6 @@ class DownloadRecordView(View):
     
     
 
-from django.core.exceptions import ValidationError
-
 def get_upload_form(file_size_limit=None):
     class _UploadRecordForm(forms.Form):
         def file_size(value):
@@ -387,7 +385,14 @@ class UploadRecordView(CreateView):
         # R.C.
         for deserialized_object in serializers.deserialize(format, uploadfile, **self.deserialize_options):
             obj = deserialized_object.object
-            #print('ouput object:' + str(obj))           
+            #print('ouput object:' + str(obj))   
+            # test assertively that models match
+            # (they may fail on fields, but to be sure)        
+            if (self.model_class and (obj._meta.model != self.model_class)):
+                raise ValidationError('Configuration rejected a model type created from uploaded data: configured type:{} : recieved type:{}'.format(
+                    model_class._meta.object_name,
+                    obj._meta.model.object_name,
+                ))
             #? Protect for recovery, or allow to explode on exception?
             obj.save(force_insert=self.force_insert)
             msg_b.append((obj._meta.model._meta.object_name, obj.pk))
