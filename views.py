@@ -85,11 +85,13 @@ https://stackoverflow.com/questions/152313/xml-attributes-vs-elements
 SerializationData = collections.namedtuple('SerializationData', ['format', 'mimes', 'file_extensions', 'requires_model'])
 
 # First MIME/extension is used as default (e.g. for downloads)
+# MIMES are a consistent set of suggestions, rather than a reference to
+# the registrations in the standard.
 SERIALIZATION_DATA = [
     SerializationData('json', ['text/json', 'application/json'], ['json'], False),
     SerializationData('xml', ['text/xml', 'application/xml'], ['xml'], False),
-    # place additions to core later, where they will not override MIME/extension etc. defaults
-    SerializationData("nonrel_csv",  ['text/csv'], ['csv'], True),
+    # place additions to core later, where they will not override MIME/extension defaults
+    SerializationData("nonrel_csv",  ['text/csv', 'application/csv'], ['csv'], True),
     SerializationData("nonrel_freecfg", ['text/plain'], ['cfg', 'freecfg', 'ini'], False),
     SerializationData("nonrel_json", ['text/json', 'application/json'], ['json'], False),
     SerializationData("nonrel_xml", ['text/xml', 'application/xml'], ['xml'], False),
@@ -199,7 +201,7 @@ class DownloadRecordView(View):
                     self.format
                     ))
             self.mime = serializer_data.mimes[0]            
-
+        
     def model_name(self):
         return self.model_class._meta.model_name
 
@@ -250,7 +252,7 @@ class DownloadRecordView(View):
             to = frm + (self.queryset_page_size - 1)
             queryset = self.model_class._default_manager.filter(pk__range=(frm, to))
             if (not len(queryset) > 0):
-                raise Http404("Query us empty, possibly page number too high for data? page:'{}'".format(
+                raise Http404("Query us empty, possibly page number too high for data?: page:'{}'".format(
                     page
                 )) 
             self.selection_id = 'page-{}'.format(page)

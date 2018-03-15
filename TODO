@@ -13,7 +13,6 @@
 #? pk detection more than model.default_manager.pk, I recall default_manager?
 #? size limitations on download
 #? bulk saving
-#? MIMEs are plain/text for page downloads (wrong)
 #? remove 'model in filename' option, or use app name?
 
 = Upload Deserializers

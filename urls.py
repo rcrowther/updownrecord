@@ -9,5 +9,5 @@ from . import views
 urlpatterns = [
     url(r'^upload/$', views.UploadRecordView.as_view(model_class=ChristmasSong, format='json')),
     url(r'^(?P<pk>[0-9]+)/download/$', views.DownloadRecordView.as_view(model_class=ChristmasSong, format='json')),
-    url(r'^download/$', views.DownloadRecordView.as_view(model_class=ChristmasSong, use_querysets=True)),
+    url(r'^download/$', views.DownloadRecordView.as_view(model_class=ChristmasSong, use_querysets=True, format='json')),
 ]
